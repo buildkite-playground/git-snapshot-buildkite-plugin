@@ -53,19 +53,20 @@ def watch_archives():
     opened = {}
     seen = set()
     while not stop.wait(0.1):
-        for root, _, names in os.walk(temporary):
-            for name in names:
-                path = Path(root) / name
-                if path in opened or path in seen:
+        # Only Cache staging paths: the checkout hook also materializes its
+        # worktree under TMPDIR. Walking that tree would perturb its timing
+        # and mistake repository ZIP/JAR fixtures for Cache archives.
+        for path in [*temporary.glob("*.zip"), *temporary.glob("zstash-restore*/*")]:
+            if path in opened or path in seen:
+                continue
+            try:
+                stream = path.open("rb")
+                if stream.read(4) != b"PK\x03\x04":
+                    stream.close()
                     continue
-                try:
-                    stream = path.open("rb")
-                    if stream.read(4) != b"PK\x03\x04":
-                        stream.close()
-                        continue
-                    opened[path] = stream
-                except OSError:
-                    continue
+                opened[path] = stream
+            except OSError:
+                continue
         for path, stream in list(opened.items()):
             stat = os.fstat(stream.fileno())
             if stat.st_nlink == 0:
