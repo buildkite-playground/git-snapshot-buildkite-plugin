@@ -69,10 +69,11 @@ newly initialized/restored directories.
 the checkout already contains restored `.git`. A cold full mirror can dominate
 time and disk use; the plugin does not silently disable it. For Cache-only
 checkout on fresh hosted agents, set `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE: "true"`
-explicitly in the step environment; when no mirror exists the agent proceeds
-without one. On self-hosted agents, disable `git-mirrors-path` in agent config
-if mirrors are unwanted. That path is agent-only: an empty job environment
-value does not override it. Skip-update can still reuse an existing mirror.
+in a trusted agent/plugin hook; when no mirror exists the agent proceeds
+without one. Pipeline environment values cannot override this protected setting.
+On self-hosted agents, disable `git-mirrors-path` in agent config if mirrors are
+unwanted. That path is agent-only: an empty job environment value does not
+override it. Skip-update can still reuse an existing mirror.
 If mirrors stay enabled, agent `dissociate` behavior is retained; `reference`
 mode can add alternates and prevents saving an independent snapshot. Remote
 mirror/clone fallback configuration likewise remains under agent control.
