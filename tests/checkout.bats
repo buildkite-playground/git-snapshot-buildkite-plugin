@@ -67,10 +67,6 @@ count_saves() {
   [ "$status" -eq 0 ]
   [[ "$output" == *'restore hit=false'* ]]
   assert_checkout "$latest"
-  before="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
-  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" fetch origin '+refs/heads/main:refs/verification-tip'
-  after="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
-  [ "$before" -eq "$after" ]
   snapshot="$(find "$TEST_CACHE" -name .git)"
   [ ! -e "$snapshot/../file" ]
   [ ! -e "$snapshot/index" ]
@@ -101,6 +97,11 @@ count_saves() {
 
 @test "existing checkout is untouched by pre-hook and cleaned by agent commands" {
   checkout_job
+  # The pinned SHA is older than main. Verifying main must not re-fetch history.
+  before="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" fetch origin '+refs/heads/main:refs/verification-tip'
+  after="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
+  [ "$before" -eq "$after" ]
   printf 'dirty\n' > "$BUILDKITE_BUILD_CHECKOUT_PATH/file"
   mkdir -p "$BUILDKITE_BUILD_CHECKOUT_PATH/nested/.git"
   touch "$BUILDKITE_BUILD_CHECKOUT_PATH/.ignored"
