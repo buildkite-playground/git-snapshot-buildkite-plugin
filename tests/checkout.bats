@@ -92,6 +92,11 @@ rg_count_saves() {
   [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/added")" = 'second file' ]
   [ "$(find "$TEST_CACHE" -name .git | wc -l)" -eq 2 ]
   [ "$(rg_count_saves)" -eq 2 ]
+  # Both revisions' blobs are now hydrated. A delta fetch must not download a
+  # second copy of the existing commits and trees into another pack.
+  expected_objects="$(git -C "$source_repo" rev-list --objects --all | wc -l)"
+  packed_objects="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
+  [ "$packed_objects" -eq "$expected_objects" ]
 }
 
 @test "HEAD resolves the branch or custom PR refspec, pinned commits stay pinned" {

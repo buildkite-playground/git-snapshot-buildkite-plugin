@@ -69,7 +69,13 @@ configure_origin() {
 
 fetch_checkout() {
   local ref target fetch_start checkout_start
+  local -a fetch_flags=(--filter=blob:none)
   fetch_start=$SECONDS
+  # A detached HEAD is not advertised by Git's default ref-based negotiation.
+  # Include it explicitly, including for snapshots saved by older versions.
+  if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
+    fetch_flags+=(--negotiation-tip=HEAD)
+  fi
   ref="${BUILDKITE_REFSPEC:-}"
   if [[ -z "$ref" && "${BUILDKITE_PULL_REQUEST:-false}" != false && -n "${BUILDKITE_PULL_REQUEST:-}" && "$repo" == *github.com* ]]; then
     ref="refs/pull/${BUILDKITE_PULL_REQUEST}/head"
@@ -78,18 +84,18 @@ fetch_checkout() {
     fi
   fi
   if [[ -n "$ref" ]]; then
-    git_cmd fetch --filter=blob:none -- origin "$ref" || return
+    git_cmd fetch "${fetch_flags[@]}" -- origin "$ref" || return
   elif [[ "$commit" == HEAD ]]; then
-    git_cmd fetch --filter=blob:none -- origin "${BUILDKITE_BRANCH:-HEAD}" || return
+    git_cmd fetch "${fetch_flags[@]}" -- origin "${BUILDKITE_BRANCH:-HEAD}" || return
   else
-    git_cmd fetch --filter=blob:none -- origin "$commit" || return
+    git_cmd fetch "${fetch_flags[@]}" -- origin "$commit" || return
   fi
   if [[ "$commit" == HEAD ]]; then
     target="$(git_cmd rev-parse --verify 'FETCH_HEAD^{commit}')" || return
   else
     # A force-pushed PR ref may no longer contain the build's pinned SHA.
     if ! git_cmd cat-file -e "${commit}^{commit}"; then
-      git_cmd fetch --filter=blob:none -- origin "$commit" || return
+      git_cmd fetch "${fetch_flags[@]}" -- origin "$commit" || return
     fi
     target="$(git_cmd rev-parse --verify "${commit}^{commit}")" || return
   fi

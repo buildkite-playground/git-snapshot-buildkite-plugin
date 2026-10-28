@@ -27,6 +27,8 @@ plugin download. Do not set `BUILDKITE_SKIP_CHECKOUT`.
 * Fetch with `--filter=blob:none`, then detached checkout with
   `checkout.workers=8` and `checkout.thresholdForParallelism=1`. This downloads
   HEAD's blobs in bulk. No shallow clone or object alternates are used.
+  The saved HEAD is explicitly included in fetch negotiation so newer revisions
+  reuse its history even when the snapshot has no branch refs.
 * A corrupt snapshot or failed cached fetch/checkout retries from a fresh
   blobless repository. Cache save failure is nonfatal. If the fresh fetch or
   checkout also fails (for example, invalid revision or missing auth), the job
