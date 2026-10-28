@@ -1,0 +1,16 @@
+services:
+  tests:
+    image: buildkite/plugin-tester:latest
+    volumes:
+      - .:/plugin
+    command: [bash, -c, "apk add --no-cache git && bats tests/"]
+  lint:
+    image: buildkite/plugin-linter:latest
+    command: [--id, buildkite-playground/git-snapshot, --path, /plugin]
+    volumes:
+      - .:/plugin
+  shellcheck:
+    image: koalaman/shellcheck:stable
+    command: [hooks/checkout, tests/cache-agent]
+    volumes:
+      - .:/mnt

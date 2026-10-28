@@ -1,0 +1,31 @@
+name: Git Snapshot
+description: Restore a blobless Git snapshot from Buildkite Cache and check out with parallel workers
+author: https://github.com/buildkite-playground
+requirements:
+  - bash
+  - git
+  - buildkite-agent
+configuration:
+  properties:
+    checkout-workers:
+      type: integer
+      minimum: 1
+      default: 8
+    max-age:
+      type: integer
+      minimum: 1
+      maximum: 86400
+      default: 86400
+      description: Snapshot refresh age and immutable key period, in seconds (at most one day)
+    refresh:
+      type: boolean
+      default: true
+    refresh-only:
+      type: boolean
+      default: false
+      description: Populate the cache without installing a worktree; pair with command ':'
+    key-prefix:
+      type: string
+      minLength: 1
+      default: git-snapshot-v1
+  additionalProperties: false

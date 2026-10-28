@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Filesystem stand-in for Cache; Git itself is never mocked.
+set -euo pipefail
+[[ "$1" == cache && "$3" == --cache-config-file && "$5" == --cache-fail-on-error && "$6" == --no-color ]]
+[[ "$(cat "$4")" == *'fallback_limit: true'* && "$(cat "$4")" == *'      - .git'* ]]
+namespace="$(printf '%s\n%s' "$GIT_SNAPSHOT_PREFIX" "$GIT_SNAPSHOT_REPO" | git hash-object --stdin)"
+store="$TEST_CACHE/$namespace"
+mkdir -p "$store"
+entry="$store/$GIT_SNAPSHOT_PERIOD"
+echo "$2 $GIT_SNAPSHOT_PERIOD" >> "$TEST_CACHE/operations"
+case "$2" in
+  restore)
+    [[ "${TEST_RESTORE_ERROR:-false}" == false ]] || { mkdir .git; exit 1; }
+    if [[ ! -d "$entry" ]]; then
+      entry="$(find "$store" -mindepth 1 -maxdepth 1 -type d | sort -t / -k 999n | tail -1)"
+    fi
+    [[ -n "$entry" ]] || exit 0
+    cp -a "$entry/.git" .git
+    ;;
+  save)
+    [[ "${TEST_SAVE_ERROR:-false}" == false ]] || exit 1
+    [[ -d "$entry" ]] && exit 0
+    mkdir "$entry"
+    cp -a .git "$entry/.git"
+    ;;
+  *) exit 1 ;;
+esac
