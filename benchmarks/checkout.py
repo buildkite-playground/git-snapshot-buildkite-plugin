@@ -159,7 +159,9 @@ if return_code == 0 and abort is None:
         assert git("config", "remote.origin.promisor") == "true"
         assert git("config", "remote.origin.partialclonefilter") == partial_filter
         if args.treeless:
-            old_tree = git("show", "--no-patch", "--format=%T", "HEAD~10000")
+            # Even show --no-patch can prepare a missing tree on hosted Git.
+            # The raw commit header needs no tree lookup or network access.
+            old_tree = git("cat-file", "commit", "HEAD~10000").splitlines()[0].split()[1]
             missing = subprocess.run(["git", "cat-file", "-e", old_tree], cwd=checkout,
                                      env=validation_env, capture_output=True)
             assert missing.returncode != 0, "Historical tree unexpectedly hydrated"

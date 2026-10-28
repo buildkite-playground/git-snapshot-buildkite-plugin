@@ -1,6 +1,8 @@
-# Hosted checkout measurements — 2026-10-28
+# Earlier hosted checkout measurements — 2026-10-28
 
-Final design: the **checkout hook**, not the experimental pre/post hooks.
+This is the earlier round, using the **checkout hook**. The current plugin
+defaults to mirror-aware pre/post hooks; do not read this report's historical
+design choice as the current default. See the main README for current behavior.
 The tested final revision is
 [`5bfe21e`](https://github.com/buildkite-playground/git-snapshot-buildkite-plugin/commit/5bfe21e2783db5316a6352ff3ac1ddb1ac412634).
 Its hook is identical to the preceding
@@ -132,7 +134,9 @@ protected hosted mirror creation. We observed six mirror clone failures with
 Pipeline-level mirror-path/skip-update values could not override the protected
 settings. The custom checkout hook avoids that path without changing the
 cluster. It is the final default, with the agent-knob limitations in the main
-README. This is not evidence that pre/post is fast on unmodified hosted agents.
+README at that revision. This is not evidence that pre/post is fast on
+unmodified hosted agents. The current default instead bypasses snapshots
+entirely when mirrors are enabled, leaving normal agent checkout untouched.
 
 The experimental revision remains in history at
 [`cf1c8b2`](https://github.com/buildkite-playground/git-snapshot-buildkite-plugin/commit/cf1c8b213422011732a236d16c9e5c031806f580).
