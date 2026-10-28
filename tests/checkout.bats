@@ -25,7 +25,10 @@ setup() {
   export BUILDKITE_REPO="file://$source_repo"
   export BUILDKITE_BUILD_CHECKOUT_PATH="$BATS_TEST_TMPDIR/checkout"
   export BUILDKITE_COMMIT="$old" BUILDKITE_BRANCH=main
-  hook="$BATS_TEST_DIRNAME/../hooks/checkout"
+  export BUILDKITE_SKIP_CHECKOUT=false
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE=checkout
+  unset BUILDKITE_GIT_MIRRORS_PATH
+  hook="$BATS_TEST_DIRNAME/../hooks/pre-checkout"
 }
 
 assert_checkout() {
@@ -62,6 +65,9 @@ assert_checkout() {
   # Hooks are sourced by the agent; their cwd, traps and options must not leak.
   source "$hook"
   [ "$PWD" = "$initial_dir" ]
+  [ "$BUILDKITE_SKIP_CHECKOUT" = true ]
+  # The next invocation represents a separate job, not another hook in this job.
+  export BUILDKITE_SKIP_CHECKOUT=false
   printf 'dirty\n' > "$BUILDKITE_BUILD_CHECKOUT_PATH/file"
   mkdir -p "$BUILDKITE_BUILD_CHECKOUT_PATH/nested/.git"
   touch "$BUILDKITE_BUILD_CHECKOUT_PATH/.ignored"
@@ -186,4 +192,60 @@ rg_count_saves() {
   run "$hook"
   [ "$status" -ne 0 ]
   [[ "$output" != *secret* ]]
+}
+
+@test "treeless snapshots isolate keys, keep HEAD local and historical trees missing" {
+  export BUILDKITE_COMMIT="$latest"
+  "$hook"
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS=true
+  export GIT_TRACE2_EVENT="$BATS_TEST_TMPDIR/trace.json"
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'restore hit=false'* ]]
+  [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" config remote.origin.partialclonefilter)" = tree:0 ]
+  [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/file")" = 'new contents' ]
+  [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/added")" = 'second file' ]
+  [ "$(find "$TEST_CACHE" -name .git | wc -l)" -eq 2 ]
+  run env GIT_ALLOW_PROTOCOL= git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" rev-list --objects --missing=print 'HEAD^{tree}'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'?'* ]]
+  historical_tree="$(git -C "$source_repo" rev-parse "$old^{tree}")"
+  run env GIT_ALLOW_PROTOCOL= git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" cat-file -e "$historical_tree"
+  [ "$status" -ne 0 ]
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'restore hit=true'* ]]
+}
+
+@test "agent mode preserves refs and supports a plain stale delta fetch" {
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE=agent
+  git -C "$source_repo" reset --hard "$old"
+  git -C "$source_repo" tag seed "$old"
+  source "$hook"
+  [ "$BUILDKITE_SKIP_CHECKOUT" = false ]
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" fetch origin "$old"
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" checkout -f FETCH_HEAD
+  source "$BATS_TEST_DIRNAME/../hooks/post-checkout"
+  snapshot="$(find "$TEST_CACHE" -name .git)"
+  [ "$(git --git-dir="$snapshot" rev-parse refs/tags/seed)" = "$old" ]
+  rm -rf "$BUILDKITE_BUILD_CHECKOUT_PATH"
+  git -C "$source_repo" reset --hard "$latest"
+  export BUILDKITE_COMMIT="$latest"
+  "$hook"
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" fetch origin "$latest"
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" checkout -f FETCH_HEAD
+  assert_checkout "$latest"
+  expected_objects="$(git -C "$source_repo" rev-list --objects --all | wc -l)"
+  packed_objects="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
+  [ "$packed_objects" -eq "$expected_objects" ]
+}
+
+@test "default agent mode with mirrors enabled never restores or saves" {
+  unset BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE
+  export BUILDKITE_GIT_MIRRORS_PATH="$BATS_TEST_TMPDIR/mirrors"
+  source "$hook"
+  source "$BATS_TEST_DIRNAME/../hooks/post-checkout"
+  [ "$BUILDKITE_SKIP_CHECKOUT" = false ]
+  [ ! -e "$BUILDKITE_BUILD_CHECKOUT_PATH/.git" ]
+  [ ! -e "$TEST_CACHE/operations" ]
 }

@@ -16,7 +16,11 @@ parser.add_argument("--plugin-ref", required=True)
 parser.add_argument("--prefix", required=True)
 parser.add_argument("--max-age", type=int, default=86400)
 parser.add_argument("--read-only", action="store_true")
+parser.add_argument("--treeless", action="store_true")
+parser.add_argument("--checkout-mode", choices=["agent", "checkout"], default="agent")
+parser.add_argument("--probes", help="Repository-relative path for independent history probes")
 args = parser.parse_args()
+partial_filter = "tree:0" if args.treeless else "blob:none"
 checkout = Path(os.environ["BUILDKITE_BUILD_CHECKOUT_PATH"])
 result_dir = Path("/tmp") / ("git-snapshot-results-" + os.environ["BUILDKITE_JOB_ID"])
 result_dir.mkdir()
@@ -30,18 +34,22 @@ env = dict(os.environ, BUILDKITE_SKIP_CHECKOUT="false", TMPDIR=str(temporary),
 env.update(BUILDKITE_GIT_MIRRORS_SKIP_UPDATE="true", BUILDKITE_GIT_SUBMODULES="false",
            BUILDKITE_GIT_LFS_ENABLED="false", BUILDKITE_GIT_COMMIT_VERIFICATION="strict",
            BUILDKITE_GIT_FETCH_FLAGS="-v --prune",
-           BUILDKITE_GIT_CLONE_FLAGS="-v --filter=blob:none" if args.mode == "blobless" else "-v")
+           BUILDKITE_GIT_CLONE_FLAGS="-v --filter=" + partial_filter if args.mode == "blobless" else "-v")
+# The outer hosted job retains protected mirror settings. This controlled
+# bootstrap explicitly disables them, including the hook-visible path.
+env["BUILDKITE_GIT_MIRRORS_PATH"] = ""
 env["BUILDKITE_PLUGINS"] = json.dumps([
     {"github.com/buildkite-playground/git-snapshot-buildkite-plugin#" + args.plugin_ref: {
         "key-prefix": args.prefix, "max-age": args.max_age,
-        "refresh": not args.read_only}}
+        "refresh": not args.read_only, "treeless": args.treeless,
+        "mode": args.checkout_mode}}
 ]) if args.mode == "snapshot" else "[]"
 command = ["buildkite-agent", "bootstrap", "--phases=plugin,checkout",
            "--git-mirrors-path=", "--git-mirrors-skip-update=true",
            "--local-hooks-enabled=false", "--no-job-api",
            "--git-submodules=false", "--git-lfs-enabled=false",
            "--git-commit-verification=strict",
-           "--git-clone-flags=" + ("-v --filter=blob:none" if args.mode == "blobless" else "-v"),
+           "--git-clone-flags=" + ("-v --filter=" + partial_filter if args.mode == "blobless" else "-v"),
            "--git-fetch-flags=-v --prune"]
 
 # Hold descriptors across unlink long enough to fstat final ZIP lengths, rather
@@ -99,6 +107,7 @@ seconds = time.monotonic() - start
 stop.set()
 watcher.join()
 result = {"mode": args.mode, "plugin_ref": args.plugin_ref, "prefix": args.prefix,
+          "treeless": args.treeless, "checkout_mode": args.checkout_mode,
           "read_only": args.read_only, "max_age": args.max_age,
           "build_url": os.environ["BUILDKITE_BUILD_URL"], "job_id": os.environ["BUILDKITE_JOB_ID"],
           "repo": os.environ["BUILDKITE_REPO"], "requested_commit": os.environ["BUILDKITE_COMMIT"],
@@ -112,9 +121,12 @@ result = {"mode": args.mode, "plugin_ref": args.plugin_ref, "prefix": args.prefi
 # Trace2 root Git processes distinguish checkout from its lazy fetch children.
 trace = result_dir / "git-trace.json"
 sessions = {}
+fetch_invocations = 0
 if trace.exists():
     for line in trace.read_text().splitlines():
         event = json.loads(line)
+        if event["event"] == "cmd_name" and event.get("name") == "fetch":
+            fetch_invocations += 1
         sid = event.get("sid", "")
         if "/" in sid:
             continue
@@ -126,6 +138,7 @@ if trace.exists():
         elif event["event"] == "exit":
             state["seconds"] = event["t_abs"]
 result["git_root_processes"] = list(sessions.values())
+result["fetch_invocations"] = fetch_invocations
 
 if return_code == 0 and abort is None:
     validation_env = dict(os.environ, GIT_ALLOW_PROTOCOL="", GIT_NO_LAZY_FETCH="1")
@@ -144,13 +157,23 @@ if return_code == 0 and abort is None:
     assert "?" not in git("rev-list", "--objects", "--missing=print", "HEAD^{tree}")
     if args.mode != "default":
         assert git("config", "remote.origin.promisor") == "true"
-        assert git("config", "remote.origin.partialclonefilter") == "blob:none"
-        assert "?" in git("rev-list", "--objects", "--missing=print", "HEAD~10000^{tree}")
+        assert git("config", "remote.origin.partialclonefilter") == partial_filter
+        if args.treeless:
+            old_tree = git("show", "--no-patch", "--format=%T", "HEAD~10000")
+            missing = subprocess.run(["git", "cat-file", "-e", old_tree], cwd=checkout,
+                                     env=validation_env, capture_output=True)
+            assert missing.returncode != 0, "Historical tree unexpectedly hydrated"
+        else:
+            assert "?" in git("rev-list", "--objects", "--missing=print", "HEAD~10000^{tree}")
     result.update(sha=sha, tree=tree, correctness="passed",
                   tracked_entries=len(subprocess.check_output(["git", "ls-files", "-z"], cwd=checkout).split(b"\0"))-1,
                   commits=int(git("rev-list", "--count", "HEAD")),
                   git_bytes=int(subprocess.check_output(["du", "-sb", ".git"], cwd=checkout).split()[0]),
                   worktree_bytes=int(subprocess.check_output(["du", "--exclude=.git", "-sb", "."], cwd=checkout).split()[0]))
+    if args.probes:
+        subprocess.run(["python3", str(Path(__file__).with_name("probes.py")),
+                        "--checkout", str(checkout), "--path", args.probes,
+                        "--output", str(result_dir / "probes.json")], check=True)
 else:
     result["correctness"] = "not validated"
 
@@ -158,6 +181,8 @@ output = result_dir / "result.json"
 output.write_text(json.dumps(result, indent=2) + "\n")
 print("BENCHMARK_RESULT " + json.dumps(result), flush=True)
 subprocess.run(["buildkite-agent", "artifact", "upload", "result.json"], cwd=result_dir, check=True)
+if args.probes:
+    subprocess.run(["buildkite-agent", "artifact", "upload", "probes.json"], cwd=result_dir, check=True)
 shutil.rmtree(temporary)
 if return_code or abort:
     raise SystemExit(1)

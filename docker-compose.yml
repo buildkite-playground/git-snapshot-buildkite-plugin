@@ -11,6 +11,6 @@ services:
       - .:/plugin
   shellcheck:
     image: koalaman/shellcheck:stable
-    command: [hooks/checkout, tests/cache-agent]
+    command: [hooks/pre-checkout, hooks/post-checkout, lib/checkout.sh, lib/snapshot.sh, lib/agent-pre.sh, lib/agent-post.sh, tests/cache-agent]
     volumes:
       - .:/mnt

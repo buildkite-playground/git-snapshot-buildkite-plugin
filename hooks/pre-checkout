@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Keep exported agent overrides outside the isolated implementation processes.
+case "${BUILDKITE_SKIP_CHECKOUT:-false}" in
+  true|1) echo 'git-snapshot: checkout skipped by the job' ;;
+  *)
+    case "${BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE:-agent}" in
+      checkout)
+        bash "$(dirname "${BASH_SOURCE[0]}")/../lib/checkout.sh" || exit "$?"
+        export BUILDKITE_SKIP_CHECKOUT=true
+        ;;
+      agent)
+        if [[ -n "${BUILDKITE_GIT_MIRRORS_PATH:-}" ]]; then
+          echo 'git-snapshot: Git mirrors enabled; skipping snapshot restore; agent owns checkout'
+        else
+          bash "$(dirname "${BASH_SOURCE[0]}")/../lib/agent-pre.sh" || exit "$?"
+        fi
+        ;;
+      *) echo 'git-snapshot: mode must be checkout or agent' >&2; exit 1 ;;
+    esac
+    ;;
+esac

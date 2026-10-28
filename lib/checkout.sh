@@ -2,75 +2,19 @@
 (
 set -euo pipefail
 started=$SECONDS
-
-workers="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_CHECKOUT_WORKERS:-8}"
-max_age="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_MAX_AGE:-86400}"
-refresh="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_REFRESH:-true}"
-refresh_only="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_REFRESH_ONLY:-false}"
-prefix="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_KEY_PREFIX:-git-snapshot-v1}"
-repo="${BUILDKITE_REPO:?BUILDKITE_REPO is required}"
-checkout="${BUILDKITE_BUILD_CHECKOUT_PATH:?BUILDKITE_BUILD_CHECKOUT_PATH is required}"
+# shellcheck source=lib/snapshot.sh
+source "$(dirname "${BASH_SOURCE[0]}")/snapshot.sh"
 commit="${BUILDKITE_COMMIT:-HEAD}"
-
-[[ "$workers" =~ ^[1-9][0-9]*$ && "$max_age" =~ ^[1-9][0-9]*$ ]] || {
-  echo 'git-snapshot: workers and max-age must be positive integers' >&2; exit 1;
-}
-(( max_age <= 86400 )) || { echo 'git-snapshot: max-age must be <= 86400 seconds' >&2; exit 1; }
-[[ "$refresh" =~ ^(true|false)$ && "$refresh_only" =~ ^(true|false)$ ]] || exit 1
-[[ ! "$repo" =~ ^https?://[^/]*@ ]] || {
-  echo 'git-snapshot: use a credential helper, not credentials in the repository URL' >&2; exit 1;
-}
-[[ "$checkout" = /* && "$checkout" != / && "$checkout" != "${HOME:-/}" && ! -L "$checkout" ]] || {
-  echo 'git-snapshot: checkout must be a dedicated absolute directory, not a symlink' >&2; exit 1;
-}
-mkdir -p "$checkout"
-checkout="$(cd "$checkout" && pwd -P)"
-[[ "$checkout" != / && "$checkout" != "${HOME:-/}" ]] || exit 1
 
 # Restore into an empty, job-private directory: a successful CLI exit can be a miss.
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir "$scratch/snapshot"
-now="$(date +%s)"
-export GIT_SNAPSHOT_PREFIX="$prefix"
-export GIT_SNAPSHOT_REPO
-GIT_SNAPSHOT_REPO="$(printf '%s' "$repo" | git hash-object --stdin)"
-export GIT_SNAPSHOT_PERIOD="$((now / max_age))"
-cat > "$scratch/cache.yml" <<'YAML'
-caches:
-  - name: git_snapshot
-    cache_key:
-      - env: GIT_SNAPSHOT_PREFIX
-      - env: GIT_SNAPSHOT_REPO
-        fallback_limit: true
-      - env: GIT_SNAPSHOT_PERIOD
-    target_paths:
-      - .git
-YAML
-
-git_cmd() {
-  git -c core.hooksPath=/dev/null -c gc.auto=0 "$@"
-}
-
-cache() {
-  buildkite-agent cache "$1" --cache-config-file "$scratch/cache.yml" \
-    --cache-fail-on-error --no-color
-}
-
-# Rebuild config instead of retaining job-local auth, paths, filters or helpers.
-configure_origin() {
-  rm -f .git/config || return
-  git_cmd config core.repositoryformatversion 0 || return
-  git_cmd config core.bare false || return
-  git_cmd config remote.origin.url "$repo" || return
-  git_cmd config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' || return
-  git_cmd config remote.origin.promisor true || return
-  git_cmd config remote.origin.partialclonefilter blob:none
-}
+cache_config
 
 fetch_checkout() {
   local ref target fetch_start checkout_start
-  local -a fetch_flags=(--filter=blob:none)
+  local -a fetch_flags=(--filter="$filter")
   fetch_start=$SECONDS
   # A detached HEAD is not advertised by Git's default ref-based negotiation.
   # Include it explicitly, including for snapshots saved by older versions.

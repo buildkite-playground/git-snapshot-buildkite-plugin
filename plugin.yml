@@ -7,6 +7,15 @@ requirements:
   - buildkite-agent
 configuration:
   properties:
+    mode:
+      type: string
+      enum: [checkout, agent]
+      default: agent
+      description: Agent mode skips snapshots when mirrors are enabled; checkout is explicit opt-in
+    treeless:
+      type: boolean
+      default: false
+      description: Use tree:0 instead of blob:none; historical trees may need lazy fetches
     checkout-workers:
       type: integer
       minimum: 1
@@ -23,9 +32,9 @@ configuration:
     refresh-only:
       type: boolean
       default: false
-      description: Populate the cache without installing a worktree; pair with command ':'
+      description: Refresh job; checkout mode installs no worktree; pair with command ':'
     key-prefix:
       type: string
       minLength: 1
-      default: git-snapshot-v1
+      default: git-snapshot-v3
   additionalProperties: false

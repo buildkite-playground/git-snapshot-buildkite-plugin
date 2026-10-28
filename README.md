@@ -17,67 +17,63 @@ steps:
 
 Pin a reviewed commit instead of `main` in production. Requires Bash, Git 2.43+
 and clustered Buildkite agents 4.0.3+ with Buildkite Cache configured. Hosted
-agents already have a Cache store. This replaces the agent's checkout, not its
-plugin download. Do not set `BUILDKITE_SKIP_CHECKOUT`.
+agents already have a Cache store. By default, pre/post-checkout hooks seed the
+repository and let the agent own checkout. Do not set `BUILDKITE_SKIP_CHECKOUT`.
 
-## Why a checkout hook on hosted agents?
+## Git mirrors and hosted agents
 
-We tested an agent-owned pre/post-checkout variant on hosted-large. With mirrors
-disabled, Linux cold/warm/stale runs passed in 116.9/20.2/31.2 seconds. However,
-a real hosted warm job with protected mirror settings unchanged restored the
-snapshot and then attempted a full on-host mirror clone, repeatedly failing with
-`fetch-pack: invalid index-pack output`. The underlying mirror failure cause is
-not established. Restoring `.git` does not bypass this mirror work.
+**When `BUILDKITE_GIT_MIRRORS_PATH` is nonempty, the default mode skips both
+restore and save.** It logs the reason and leaves normal mirror checkout alone.
+It does not inspect mirror freshness, override protected variables, or change
+cluster settings. To use snapshots in default mode on hosted agents, turn off
+Git mirror volumes on the cluster first; that is an administrator decision.
 
-The checkout hook remains the default: it avoids the agent's mirror/clone path
-without changing protected cluster settings. The experimental agent-owned
-variant is available at commit
-[`cf1c8b2`](https://github.com/buildkite-playground/git-snapshot-buildkite-plugin/commit/cf1c8b213422011732a236d16c9e5c031806f580),
-but requires mirrors disabled/skipped for the measured fast path. An empty
-pipeline mirror-path setting or a pipeline `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE`
-value cannot override the hosted protected settings. Do not use its controlled
-bootstrap timings as an unmodified hosted-job claim.
+Hosted agent 4.7.0+15166 protects both mirror path and skip-update settings even
+from plugin hooks. Our diagnostic jobs started with no mirror, rejected both
+hook overrides, and created mirrors anyway. Simply restoring `.git` does not
+bypass that work. An empty pipeline mirror-path setting is not an opt-out.
 
-The Chromium experiment also encountered a large extra fetch and autopack after
-restoring the pre/post snapshot; that warm run was canceled. Its snapshot rebuild
-does not preserve the original branch/tag refs. This variant is not qualified as
-a fast path for large, heavily tagged repositories, even with mirrors off.
+Several native benchmark jobs cloned fresh mirrors, but that establishes cold
+mirror contents, **not** missing volume attachments or a fleet-wide miss rate.
+The single 1,762s Chromium baseline was a controlled default full clone with
+mirrors off, not a measurement of native mirror creation.
 
-**Tradeoff:** the default custom checkout does not inherit the agent's Git
+If mirrors cannot be disabled, explicitly opt into `mode: checkout`. This runs
+the plugin-owned checkout in pre-checkout and then skips agent checkout, without
+changing mirror settings. **Tradeoff:** this mode does not inherit the agent's Git
 clone/fetch/clean flags, branch-membership verification, sparse checkout,
-submodule or LFS orchestration. Agent `fail-closed` commit verification rejects
-custom checkout hooks. `BUILDKITE_CLEAN_CHECKOUT` is redundant: the plugin always
-installs a fresh worktree. For workloads that require those agent-owned knobs,
-use the experimental pre/post variant only with an appropriately configured
-agent, or keep the normal agent checkout instead.
+submodule or LFS orchestration. The default `mode: agent` preserves these agent
+behaviors. `BUILDKITE_CLEAN_CHECKOUT=true` bypasses snapshot seeding in agent
+mode, because the agent removes that directory before checkout.
 
 ## Behavior
 
 * Restore into an empty temporary directory; a miss or restore error cannot reuse
   leftovers. No CLI log parsing is needed, and Cache is invoked with `--no-color`.
-* Fetch with `--filter=blob:none`, then detached checkout with
+* Configure the promisor remote with `blob:none` (or opt-in `tree:0`) and
   `checkout.workers=8` and `checkout.thresholdForParallelism=1`. This downloads
   HEAD's blobs in bulk. No shallow clone or object alternates are used.
-  The saved HEAD is explicitly included in fetch negotiation so newer revisions
-  reuse its history even when the snapshot has no branch refs.
-* A corrupt snapshot or failed cached fetch/checkout retries from a fresh
-  blobless repository. Cache save failure is nonfatal. If the fresh fetch or
-  checkout also fails (for example, invalid revision or missing auth), the job
-  fails rather than running at the wrong revision.
-* Pinned commits remain pinned, including force-pushed PRs. `BUILDKITE_COMMIT=HEAD`
+  Snapshots retain real refs, including tags, so plain agent fetch negotiates
+  existing history rather than downloading it again. The stale index is dropped.
+* In agent mode, an existing checkout is left alone. A cache miss or invalid
+  snapshot seeds a fresh partial clone before normal agent fetch/checkout/clean.
+  Cache save failure is nonfatal. Agent fetch and checkout failures retain the
+  agent's normal retry/failure behavior.
+* In checkout mode, a failed cached fetch/checkout retries a fresh partial clone.
+  Pinned commits remain pinned, including force-pushed PRs. `BUILDKITE_COMMIT=HEAD`
   resolves `BUILDKITE_REFSPEC`, GitHub's PR head/merge ref, or `BUILDKITE_BRANCH`,
   in that order. A custom refspec is a **single** Git refspec, not shell arguments.
-* On success the plugin **replaces everything** in the agent's dedicated checkout
+* In checkout mode the plugin **replaces everything** in the agent's dedicated checkout
   directory, including ignored files and nested repositories. Do not share it
   with other jobs or keep persistent data there. Snapshots and materialization
   temporarily need disk space outside that directory.
-* Git hooks in a snapshot are not run. Submodules are **not initialized**; run
+* Git hooks in a snapshot are not run. In checkout mode submodules are **not initialized**; run
   `git submodule update --init --recursive` yourself if needed. Submodule data is
   not cached. Git LFS downloads are not accelerated by this plugin.
 
 ## Refresh and expiration
 
-The key is `[key-prefix, hash(BUILDKITE_REPO), floor(unix-time / max-age)]`.
+The key is `[key-prefix, hash(BUILDKITE_REPO + newline + filter), floor(unix-time / max-age)]`.
 `fallback_limit` is on the repository hash, making only the period optional.
 An exact hit wins; otherwise Cache selects the newest matching period. The
 relative target `.git` is identical across jobs and is the only archived path.
@@ -111,20 +107,23 @@ steps:
           refresh-only: true
 ```
 
-`refresh-only` still fetches and materializes HEAD in temporary storage, to
-hydrate its blobs before saving, but installs no worktree. It does **not**
-suppress the step's command: use `command: ":"`. Use the same repo URL, key
+`refresh-only` still fetches and materializes HEAD to hydrate its blobs before
+saving. Agent mode retains the normal agent worktree; checkout mode materializes
+it in temporary storage and installs no worktree. It does **not** suppress the
+step's command: use `command: ":"`. Use the same repo URL, key
 prefix, max-age, cluster/registry, and compatible Cache policy as consumer jobs.
 
 ## Options
 
 | Option | Default | Meaning |
 | --- | --- | --- |
+| `mode` | `agent` | Pre/post-checkout with mirror bypass; `checkout` opts into plugin-owned checkout. |
+| `treeless` | `false` | Use `tree:0` instead of `blob:none`; historical trees need lazy fetches. |
 | `checkout-workers` | `8` | Positive number of parallel checkout workers. |
 | `max-age` | `86400` | Refresh age and key period in seconds, 1–86400. |
 | `refresh` | `true` | Save on misses or stale restores. `false` is read-only Cache use. |
-| `refresh-only` | `false` | Populate snapshots without installing a worktree. |
-| `key-prefix` | `git-snapshot-v1` | Namespace/version; change to invalidate snapshots. |
+| `refresh-only` | `false` | Refresh job; use a no-op command. Checkout mode installs no worktree. |
+| `key-prefix` | `git-snapshot-v3` | Namespace/version; change to invalidate snapshots. |
 
 ## Authentication and trust
 
@@ -135,7 +134,10 @@ do not remove its promisor configuration. Configure SSH or a credential helper
 outside the repo, for example in an agent environment/pre-checkout hook. URLs
 with embedded HTTP credentials are rejected so tokens cannot enter snapshots.
 Repository-local Git config is regenerated on restore; do not rely on local
-credential helpers, custom filters or other agent checkout options being copied.
+credential helpers or custom filters being copied. Treeless mode additionally
+omits historical trees: name-only diffs and path-limited logs can need many
+network round trips. `fetch.recurseSubmodules=false` prevents fetch-time tree
+walking; the agent still controls explicit submodule checkout in agent mode.
 
 **Caches are trusted Git metadata, not a security boundary.** Configure Cache
 registry policies so untrusted PR jobs cannot save snapshots trusted builds
@@ -144,7 +146,7 @@ Registry scopes may prevent sharing across pipelines or branches even when keys
 match. Do not cache secrets. This plugin does not use cache volumes or change
 cluster settings.
 
-## Hosted measurements
+## Earlier hosted measurements (plugin-owned checkout)
 
 On Chromium's public GitHub mirror (512,501 tracked entries, 1,853,106 commits),
 11 warm snapshots had a **65.7s median / 68.3s p90**, including plugin setup,
@@ -167,5 +169,5 @@ docker compose run --rm shellcheck
 ```
 
 Or install Bats, Git and ShellCheck locally and run `bats tests/` and
-`shellcheck hooks/checkout tests/cache-agent`. Tests use real Git repositories
+`shellcheck hooks/* lib/*.sh tests/cache-agent`. Tests use real Git repositories
 and a filesystem Cache stand-in, never repository code or a live Cache store.

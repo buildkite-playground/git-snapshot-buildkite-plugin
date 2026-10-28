@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+(
+set -euo pipefail
+# shellcheck source=lib/snapshot.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/snapshot.sh"
+
+[[ "$refresh" == true && "${BUILDKITE_SKIP_CHECKOUT:-false}" == false ]] || exit 0
+cd "$checkout"
+# Never publish a shallow, mirror-dependent, or ordinary full clone as a snapshot.
+if [[ ! -d .git || -L .git || -e .git/shallow || -e .git/objects/info/alternates ||
+      -n "${GIT_ALTERNATE_OBJECT_DIRECTORIES:-}" ]] ||
+   [[ "$(git_cmd config --get remote.origin.promisor || true)" != true ||
+      "$(git_cmd config --get remote.origin.partialclonefilter || true)" != "$filter" ]]; then
+  echo 'git-snapshot: not an independent partial repository; skipping save'
+  exit 0
+fi
+created=0
+if [[ -f .git/git-snapshot-created-at ]]; then
+  read -r created < .git/git-snapshot-created-at || created=0
+fi
+[[ "$created" =~ ^[0-9]+$ ]] || created=0
+(( now - created >= max_age )) || exit 0
+
+# Cache preparation (including disk exhaustion) must not fail a usable checkout.
+set -E
+trap 'echo "git-snapshot: snapshot save failed; agent checkout remains usable" >&2; exit 0' ERR
+scratch="$(mktemp -d)"
+trap 'rm -rf -- "$scratch"' EXIT
+cache_config
+started=$SECONDS
+sha="$(git_cmd rev-parse HEAD)"
+# Copy objects only, not agent credentials, hooks, sparse config, LFS or submodules.
+# No hardlinked mutable Git metadata, and no worktree files, enter the archive.
+git_cmd init --template= "$scratch/snapshot"
+cp -R .git/objects/. "$scratch/snapshot/.git/objects/"
+# Preserve negotiation and tag knowledge, but never auth, hooks, index, sparse,
+# LFS or submodule state. Dropping tags can trigger a large auto-follow fetch.
+cp -R .git/refs/. "$scratch/snapshot/.git/refs/"
+if [[ -f .git/packed-refs ]]; then
+  cp .git/packed-refs "$scratch/snapshot/.git/packed-refs"
+fi
+cd "$scratch/snapshot"
+configure_origin
+git_cmd symbolic-ref HEAD refs/heads/buildkite-snapshot
+git_cmd update-ref refs/heads/buildkite-snapshot "$sha"
+date +%s > .git/git-snapshot-created-at
+if cache save; then
+  cp .git/git-snapshot-created-at "$checkout/.git/git-snapshot-created-at"
+else
+  echo 'git-snapshot: cache save failed; agent checkout remains usable' >&2
+fi
+echo "git-snapshot: save seconds=$((SECONDS - started)) refresh-only=$refresh_only"
+)
