@@ -3,7 +3,8 @@
 Speed up large-repository checkouts by restoring a **blobless, full-history `.git`**
 from Buildkite Cache, fetching the delta, and checking out with eight workers.
 Snapshots include the saved revision's blobs, but not historical blobs or the
-worktree. `origin` remains a promisor remote for lazy history fetches.
+worktree. Opt-in `treeless: true` also omits historical trees. `origin` remains
+a promisor remote for lazy history fetches.
 
 ```yaml
 steps:
@@ -58,11 +59,14 @@ mode, because the agent removes that directory before checkout.
 * In agent mode, an existing checkout is left alone. A cache miss or invalid
   snapshot seeds a fresh partial clone before normal agent fetch/checkout/clean.
   Cache save failure is nonfatal. Agent fetch and checkout failures retain the
-  agent's normal retry/failure behavior.
+  agent's normal retry/failure behavior. User-supplied depth flags are honored,
+  but shallow repositories are not saved as full-history snapshots.
 * In checkout mode, a failed cached fetch/checkout retries a fresh partial clone.
   Pinned commits remain pinned, including force-pushed PRs. `BUILDKITE_COMMIT=HEAD`
   resolves `BUILDKITE_REFSPEC`, GitHub's PR head/merge ref, or `BUILDKITE_BRANCH`,
-  in that order. A custom refspec is a **single** Git refspec, not shell arguments.
+  in that order. Use full commit SHAs for API-triggered checkout-mode builds;
+  Git servers cannot fetch abbreviated object IDs as refs. A custom refspec is
+  a **single** Git refspec, not shell arguments.
 * In checkout mode the plugin **replaces everything** in the agent's dedicated checkout
   directory, including ignored files and nested repositories. Do not share it
   with other jobs or keep persistent data there. Snapshots and materialization
@@ -146,15 +150,33 @@ Registry scopes may prevent sharing across pipelines or branches even when keys
 match. Do not cache secrets. This plugin does not use cache volumes or change
 cluster settings.
 
-## Earlier hosted measurements (plugin-owned checkout)
+## Hosted measurements
 
-On Chromium's public GitHub mirror (512,501 tracked entries, 1,853,106 commits),
-11 warm snapshots had a **65.7s median / 68.3s p90**, including plugin setup,
+Controlled agent-owned pre/post checkouts on Chromium (512,501 tracked entries,
+1,853,106 commits), with mirrors off:
+
+| Snapshot | Archive | Warm n | Median | p90 |
+| --- | ---: | ---: | ---: | ---: |
+| Blobless, default | 6.27 GB | 10 | 57.18s | 60.27s |
+| Treeless, opt-in | 2.56 GB | 10 | 32.85s | 35.85s |
+
+Each filter had three sequential and seven concurrent samples. Times include
+plugin setup, restore, agent fetches and checkout, but not correctness checks.
+These are small, workload-specific samples, not native mirrors-on hosted times.
+**Treeless history is costly:** `git log -n 50 -- DEPS` timed out after 300s and
+96 lazy fetches, returning only 22 commits; blobless returned all 50 in 0.021s.
+See [the comparison, history probes and limitations](benchmarks/treeless.md).
+
+### Earlier plugin-owned checkout
+
+On the same Chromium revision, 11 warm snapshots had a **65.7s median / 68.3s
+p90**, including plugin setup,
 restore, fetch and checkout. Eight samples overlapped on separate hosted-large
 agents. Single default-clone/blobless-clone baselines were 1762.3s/715.6s;
 these are practical checkout strategies, not equal-object transfer comparisons.
-The snapshot archive was 5.77 GB. A newer revision restored, fetched its delta,
-checked out and refreshed the snapshot in 129.5s (one sample).
+The snapshot archive was 5.77 GB. A newer revision restored, fetched its delta
+and checked out in approximately 77.83s, plus 51.68s for the refresh save
+(129.51s total, one sample; decomposition from timestamped logs).
 
 See [methodology, raw samples and limitations](benchmarks/README.md) before using
 these numbers. In particular, controlled comparisons disable mirrors; the real

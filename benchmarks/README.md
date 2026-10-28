@@ -90,6 +90,22 @@ entries and 1,853,117 reachable commits: eleven actual commits newer than seed.
 key. This tests the age/refresh path without waiting a day; it does not claim
 that eleven commits represent a full day's typical Chromium churn.
 
+### Stale checkout excluding the periodic save
+
+The earlier plugin-owned stale samples can be decomposed using timestamped
+Cache-start and plugin save-end log lines. These are approximate log-derived
+intervals, not new runs or separately instrumented phase stopwatches:
+
+| Repository | n | Total bootstrap | Cache save interval | Total minus save |
+| --- | ---: | ---: | ---: | ---: |
+| Linux, build 34 | 1 | 40.840s | 18.830s | **22.010s** |
+| Chromium, build 8 | 1 | 129.513s | 51.679s | **77.834s** |
+
+Linux save bounds: Unix milliseconds 1793182658717–1793182677547;
+Chromium: 1793182911738–1793182963417. The subtraction retains plugin setup,
+restore, delta fetch, checkout and final worktree installation. Save is a real
+once-per-period cost and is not included in the typical stale checkout figure.
+
 ### Interpretation
 
 The single full/blobless baseline observations were about 26.8×/10.9× the warm
