@@ -27,6 +27,7 @@ setup() {
   export BUILDKITE_COMMIT="$old" BUILDKITE_BRANCH=main
   export BUILDKITE_SKIP_CHECKOUT=false
   export BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE=checkout
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS=false
   unset BUILDKITE_GIT_MIRRORS_PATH
   hook="$BATS_TEST_DIRNAME/../hooks/pre-checkout"
 }
@@ -197,11 +198,12 @@ rg_count_saves() {
 @test "treeless snapshots isolate keys, keep HEAD local and historical trees missing" {
   export BUILDKITE_COMMIT="$latest"
   "$hook"
-  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS=true
+  unset BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS
   export GIT_TRACE2_EVENT="$BATS_TEST_TMPDIR/trace.json"
   run "$hook"
   [ "$status" -eq 0 ]
   [[ "$output" == *'restore hit=false'* ]]
+  [[ "$output" == *'treeless active; set treeless: false'* ]]
   [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" config remote.origin.partialclonefilter)" = tree:0 ]
   [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/file")" = 'new contents' ]
   [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/added")" = 'second file' ]
@@ -215,6 +217,13 @@ rg_count_saves() {
   run "$hook"
   [ "$status" -eq 0 ]
   [[ "$output" == *'restore hit=true'* ]]
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS=false
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'restore hit=true'* ]]
+  [[ "$output" != *'treeless active'* ]]
+  assert_checkout "$latest"
+  [ "$(find "$TEST_CACHE" -name .git | wc -l)" -eq 2 ]
 }
 
 @test "agent mode preserves refs and supports a plain stale delta fetch" {

@@ -5,6 +5,9 @@ started=$SECONDS
 # shellcheck source=lib/snapshot.sh
 source "$(dirname "${BASH_SOURCE[0]}")/snapshot.sh"
 commit="${BUILDKITE_COMMIT:-HEAD}"
+if [[ "$treeless" == true ]]; then
+  echo 'git-snapshot: treeless active; set treeless: false for path-history jobs'
+fi
 
 # Restore into an empty, job-private directory: a successful CLI exit can be a miss.
 scratch="$(mktemp -d)"
@@ -69,7 +72,7 @@ if [[ "$hit" == true ]]; then
   # Restores have no worktree, even when HEAD has not changed.
   rm -f .git/index
   if ! configure_origin || ! fetch_checkout; then
-    echo 'git-snapshot: snapshot unusable; retrying a fresh blobless checkout' >&2
+    echo 'git-snapshot: snapshot unusable; retrying a fresh partial checkout' >&2
     hit=false
   fi
 fi

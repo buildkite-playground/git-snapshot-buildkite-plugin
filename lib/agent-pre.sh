@@ -12,6 +12,9 @@ if [[ -e "$checkout/.git" ]]; then
   echo 'git-snapshot: existing checkout; leaving it to the agent'
   exit 0
 fi
+if [[ "$treeless" == true ]]; then
+  echo 'git-snapshot: treeless active; set treeless: false for path-history jobs'
+fi
 
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT

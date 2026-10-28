@@ -1,10 +1,10 @@
 # Git Snapshot Buildkite Plugin
 
-Speed up large-repository checkouts by restoring a **blobless, full-history `.git`**
+Speed up large-repository checkouts by restoring a **treeless, full-history `.git`**
 from Buildkite Cache, fetching the delta, and checking out with eight workers.
-Snapshots include the saved revision's blobs, but not historical blobs or the
-worktree. Opt-in `treeless: true` also omits historical trees. `origin` remains
-a promisor remote for lazy history fetches.
+Snapshots include the saved revision's trees and blobs, but not historical
+trees/blobs or the worktree. Set `treeless: false` for blobless snapshots that
+retain historical trees. `origin` remains a promisor remote for lazy history fetches.
 
 ```yaml
 steps:
@@ -12,6 +12,7 @@ steps:
     command: "./run-tests"
     plugins:
       - buildkite-playground/git-snapshot#main:
+          treeless: true
           checkout-workers: 8
           max-age: 86400
 ```
@@ -20,6 +21,37 @@ Pin a reviewed commit instead of `main` in production. Requires Bash, Git 2.43+
 and clustered Buildkite agents 4.0.3+ with Buildkite Cache configured. Hosted
 agents already have a Cache store. By default, pre/post-checkout hooks seed the
 repository and let the agent own checkout. Do not set `BUILDKITE_SKIP_CHECKOUT`.
+
+## If your job uses path history, set `treeless: false`
+
+**Treeless is the default for checkout-oriented CI. Use blobless mode for jobs
+that walk historical file paths or frequently check out old revisions:**
+
+* `git log -- <path>` and `git blame`.
+* Docs last-updated features that run Git log per file: Hugo `enableGitInfo`,
+  Docusaurus `showLastUpdateTime`, and MkDocs git-revision-date plugins.
+* Blame-based code-owner, review and coverage tools.
+* Checking out old commits or tags whose trees/blobs are not in the snapshot.
+
+```yaml
+plugins:
+  - buildkite-playground/git-snapshot#main:
+      treeless: false
+```
+
+Missing historical trees can cause many serial lazy fetches. In our hosted
+probes, Linux `git log -n 50 -- MAINTAINERS` took **150s / 199 fetches** with
+treeless versus 0.013s / zero fetches blobless. Chromium's `DEPS` path log
+**timed out after more than 300s / 96 fetches**, returning only 22 of 50 commits.
+These are single diagnostic samples, not predictions for every repository.
+Merge-base plus `git diff --name-only` stayed comparatively cheap: about
+**1–3 fetches** in the tested treeless ~50/~500-commit cases. See
+[the measured costs and limitations](benchmarks/treeless.md).
+
+Blobless avoids the missing-tree penalty, but missing historical blobs can
+still require authentication and network access, including for blame and old
+checkouts. Treeless and blobless use distinct Cache keys, so switching this
+setting never restores the other filter's snapshot.
 
 ## Git mirrors and hosted agents
 
@@ -51,7 +83,7 @@ mode, because the agent removes that directory before checkout.
 
 * Restore into an empty temporary directory; a miss or restore error cannot reuse
   leftovers. No CLI log parsing is needed, and Cache is invoked with `--no-color`.
-* Configure the promisor remote with `blob:none` (or opt-in `tree:0`) and
+* Configure the promisor remote with `tree:0` (or `blob:none` when `treeless: false`) and
   `checkout.workers=8` and `checkout.thresholdForParallelism=1`. This downloads
   HEAD's blobs in bulk. No shallow clone or object alternates are used.
   Snapshots retain real refs, including tags, so plain agent fetch negotiates
@@ -93,10 +125,10 @@ Cache entries expire three days after creation or their last **exact** restore.
 Fallback restores do not extend that lifetime. The default refresh age and key
 period are one day; `max-age` may be shortened but cannot exceed one day. Keep
 at least one trusted job running daily if you want to avoid idle expiry. The
-first job after expiry still works, but pays for a fresh blobless fetch.
+first job after expiry still works, but pays for a fresh partial-clone fetch.
 
 Snapshots retain blobs hydrated by earlier refreshes and can grow over time.
-Changing `key-prefix` forces a fresh blobless seed if you need to discard that
+Changing `key-prefix` forces a fresh partial-clone seed if you need to discard that
 accumulated data; expiration of old Cache entries alone does not shrink a newer
 snapshot derived from them.
 
@@ -122,7 +154,7 @@ prefix, max-age, cluster/registry, and compatible Cache policy as consumer jobs.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `mode` | `agent` | Pre/post-checkout with mirror bypass; `checkout` opts into plugin-owned checkout. |
-| `treeless` | `false` | Use `tree:0` instead of `blob:none`; historical trees need lazy fetches. |
+| `treeless` | `true` | Use `tree:0`; set `false` for blobless (`blob:none`) path-history jobs. |
 | `checkout-workers` | `8` | Positive number of parallel checkout workers. |
 | `max-age` | `86400` | Refresh age and key period in seconds, 1–86400. |
 | `refresh` | `true` | Save on misses or stale restores. `false` is read-only Cache use. |
@@ -157,8 +189,8 @@ Controlled agent-owned pre/post checkouts on Chromium (512,501 tracked entries,
 
 | Snapshot | Archive | Warm n | Median | p90 |
 | --- | ---: | ---: | ---: | ---: |
-| Blobless, default | 6.27 GB | 10 | 57.18s | 60.27s |
-| Treeless, opt-in | 2.56 GB | 10 | 32.85s | 35.85s |
+| Treeless, default | 2.56 GB | 10 | 32.85s | 35.85s |
+| Blobless, opt-out | 6.27 GB | 10 | 57.18s | 60.27s |
 
 Each filter had three sequential and seven concurrent samples. Times include
 plugin setup, restore, agent fetches and checkout, but not correctness checks.

@@ -1,5 +1,5 @@
 name: Git Snapshot
-description: Restore a blobless Git snapshot from Buildkite Cache and check out with parallel workers
+description: Restore a treeless Git snapshot from Buildkite Cache and check out with parallel workers
 author: https://github.com/buildkite-playground
 requirements:
   - bash
@@ -14,8 +14,8 @@ configuration:
       description: Agent mode skips snapshots when mirrors are enabled; checkout is explicit opt-in
     treeless:
       type: boolean
-      default: false
-      description: Use tree:0 instead of blob:none; historical trees may need lazy fetches
+      default: true
+      description: Use tree:0; set false for blob:none when jobs use path history
     checkout-workers:
       type: integer
       minimum: 1

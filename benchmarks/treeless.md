@@ -5,6 +5,8 @@ Tested plugin revision:
 The benchmark harness at
 [`bb0ddc6`](https://github.com/buildkite-playground/git-snapshot-buildkite-plugin/commit/bb0ddc61e131994ac6456cd30b20dbdb0a48689c)
 corrects an offline validation check; the plugin implementation is unchanged.
+Treeless was opt-in at the tested revision. The current default is treeless;
+see the main README for the path-history opt-out and current behavior.
 
 ## What these numbers mean
 

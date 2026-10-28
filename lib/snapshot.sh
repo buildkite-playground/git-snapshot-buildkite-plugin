@@ -4,7 +4,7 @@ workers="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_CHECKOUT_WORKERS:-8}"
 max_age="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_MAX_AGE:-86400}"
 refresh="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_REFRESH:-true}"
 refresh_only="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_REFRESH_ONLY:-false}"
-treeless="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS:-false}"
+treeless="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS:-true}"
 filter=blob:none
 [[ "$treeless" == false || "$treeless" == true ]] || {
   echo 'git-snapshot: treeless must be true or false' >&2; exit 1;
