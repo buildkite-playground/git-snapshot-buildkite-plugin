@@ -39,7 +39,13 @@ agent_checkout() {
 }
 
 checkout_job() {
-  "$pre" && agent_checkout && "$post"
+  local initial_dir="$PWD"
+  # The agent sources hooks and imports their environment/working-directory diff.
+  source "$pre" || return
+  [ "$PWD" = "$initial_dir" ] || return
+  agent_checkout || return
+  source "$post" || return
+  [ "$PWD" = "$initial_dir" ]
 }
 
 assert_checkout() {

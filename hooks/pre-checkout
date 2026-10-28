@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+(
 set -euo pipefail
 # shellcheck source=lib/snapshot.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/snapshot.sh"
@@ -43,3 +44,4 @@ fi
 mkdir -p "$checkout"
 mv .git "$checkout/.git"
 echo "git-snapshot: restore hit=$hit seconds=$((SECONDS - started)); agent owns fetch and checkout"
+)
