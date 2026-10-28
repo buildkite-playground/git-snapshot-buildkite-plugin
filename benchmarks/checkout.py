@@ -26,8 +26,13 @@ free_before = shutil.disk_usage(checkout).free
 assert free_before > int(os.environ.get("BENCH_MIN_FREE_GIB", "120")) * 1024**3, "Insufficient initial disk headroom"
 env = dict(os.environ, BUILDKITE_SKIP_CHECKOUT="false", TMPDIR=str(temporary),
            GIT_TRACE2_EVENT=str(result_dir / "git-trace.json"))
+# Hook refreshes re-read these values; match the explicit bootstrap CLI flags.
+env.update(BUILDKITE_GIT_MIRRORS_SKIP_UPDATE="true", BUILDKITE_GIT_SUBMODULES="false",
+           BUILDKITE_GIT_LFS_ENABLED="false", BUILDKITE_GIT_COMMIT_VERIFICATION="strict",
+           BUILDKITE_GIT_FETCH_FLAGS="-v --prune",
+           BUILDKITE_GIT_CLONE_FLAGS="-v --filter=blob:none" if args.mode == "blobless" else "-v")
 env["BUILDKITE_PLUGINS"] = json.dumps([
-    {"buildkite-playground/git-snapshot#" + args.plugin_ref: {
+    {"github.com/buildkite-playground/git-snapshot-buildkite-plugin#" + args.plugin_ref: {
         "key-prefix": args.prefix, "max-age": args.max_age,
         "refresh": not args.read_only}}
 ]) if args.mode == "snapshot" else "[]"
