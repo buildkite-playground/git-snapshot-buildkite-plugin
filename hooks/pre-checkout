@@ -31,7 +31,13 @@ if cache restore && [[ -d .git && ! -L .git && -f .git/git-snapshot-created-at ]
 fi
 if [[ "$hit" == false ]]; then
   rm -rf .git
-  git_cmd init --template= .
+  # Clone creates real refs before the agent's SHA and verification fetches.
+  # An empty init would fetch history twice before either fetch leaves a ref.
+  if ! git_cmd clone --filter=blob:none --no-checkout --template= -- "$repo" .; then
+    # Agent-managed SSH credentials may only become available during checkout.
+    rm -rf .git
+    git_cmd init --template= .
+  fi
 else
   # Never reuse an index: an unchanged HEAD must still materialize every file.
   rm -f .git/index

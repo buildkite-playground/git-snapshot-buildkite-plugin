@@ -24,7 +24,10 @@ agents already have a Cache store. No cache volumes are used.
 
 * **Pre-checkout:** if `.git` already exists, leave it to the agent. Otherwise,
   restore into a private temporary directory. A miss, restore error, or invalid
-  snapshot creates an empty blobless repository for the agent to fetch into.
+  snapshot seeds a blobless `clone --no-checkout`, creating real refs before
+  the agent's fetch and branch-verification fetch. If that clone fails (for
+  example, agent-managed SSH auth is not installed yet), initialize an empty
+  blobless repository and let the agent fetch with its credentials/retry policy.
   The checkout directory's other files are not removed by the plugin.
 * Rebuild local config with canonical `origin`, `remote.origin.promisor=true`,
   `remote.origin.partialclonefilter=blob:none`, `checkout.workers=8`, and

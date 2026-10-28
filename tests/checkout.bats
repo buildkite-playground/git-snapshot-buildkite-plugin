@@ -67,6 +67,10 @@ count_saves() {
   [ "$status" -eq 0 ]
   [[ "$output" == *'restore hit=false'* ]]
   assert_checkout "$latest"
+  before="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" fetch origin '+refs/heads/main:refs/verification-tip'
+  after="$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" count-objects -v | sed -n 's/^in-pack: //p')"
+  [ "$before" -eq "$after" ]
   snapshot="$(find "$TEST_CACHE" -name .git)"
   [ ! -e "$snapshot/../file" ]
   [ ! -e "$snapshot/index" ]
@@ -111,7 +115,9 @@ count_saves() {
 }
 
 @test "plain agent fetch from a stale snapshot transfers only the delta" {
+  git -C "$source_repo" reset --hard "$old"
   checkout_job
+  git -C "$source_repo" reset --hard "$latest"
   snapshot="$(find "$TEST_CACHE" -name .git)"
   period_dir="$(dirname "$snapshot")"
   period="$(basename "$period_dir")"
