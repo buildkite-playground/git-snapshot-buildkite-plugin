@@ -1,5 +1,5 @@
 name: Git Snapshot
-description: Restore a blobless Git snapshot from Buildkite Cache while keeping agent-owned checkout
+description: Restore a blobless Git snapshot from Buildkite Cache and check out with parallel workers
 author: https://github.com/buildkite-playground
 requirements:
   - bash
@@ -23,9 +23,9 @@ configuration:
     refresh-only:
       type: boolean
       default: false
-      description: Scheduled refresh job; the agent still checks out normally, pair with command ':'
+      description: Populate the cache without installing a worktree; pair with command ':'
     key-prefix:
       type: string
       minLength: 1
-      default: git-snapshot-v2
+      default: git-snapshot-v1
   additionalProperties: false

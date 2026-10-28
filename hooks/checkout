@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+(
+set -euo pipefail
+started=$SECONDS
+
+workers="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_CHECKOUT_WORKERS:-8}"
+max_age="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_MAX_AGE:-86400}"
+refresh="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_REFRESH:-true}"
+refresh_only="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_REFRESH_ONLY:-false}"
+prefix="${BUILDKITE_PLUGIN_GIT_SNAPSHOT_KEY_PREFIX:-git-snapshot-v1}"
+repo="${BUILDKITE_REPO:?BUILDKITE_REPO is required}"
+checkout="${BUILDKITE_BUILD_CHECKOUT_PATH:?BUILDKITE_BUILD_CHECKOUT_PATH is required}"
+commit="${BUILDKITE_COMMIT:-HEAD}"
+
+[[ "$workers" =~ ^[1-9][0-9]*$ && "$max_age" =~ ^[1-9][0-9]*$ ]] || {
+  echo 'git-snapshot: workers and max-age must be positive integers' >&2; exit 1;
+}
+(( max_age <= 86400 )) || { echo 'git-snapshot: max-age must be <= 86400 seconds' >&2; exit 1; }
+[[ "$refresh" =~ ^(true|false)$ && "$refresh_only" =~ ^(true|false)$ ]] || exit 1
+[[ ! "$repo" =~ ^https?://[^/]*@ ]] || {
+  echo 'git-snapshot: use a credential helper, not credentials in the repository URL' >&2; exit 1;
+}
+[[ "$checkout" = /* && "$checkout" != / && "$checkout" != "${HOME:-/}" && ! -L "$checkout" ]] || {
+  echo 'git-snapshot: checkout must be a dedicated absolute directory, not a symlink' >&2; exit 1;
+}
+mkdir -p "$checkout"
+checkout="$(cd "$checkout" && pwd -P)"
+[[ "$checkout" != / && "$checkout" != "${HOME:-/}" ]] || exit 1
+
+# Restore into an empty, job-private directory: a successful CLI exit can be a miss.
+scratch="$(mktemp -d)"
+trap 'rm -rf -- "$scratch"' EXIT
+mkdir "$scratch/snapshot"
+now="$(date +%s)"
+export GIT_SNAPSHOT_PREFIX="$prefix"
+export GIT_SNAPSHOT_REPO
+GIT_SNAPSHOT_REPO="$(printf '%s' "$repo" | git hash-object --stdin)"
+export GIT_SNAPSHOT_PERIOD="$((now / max_age))"
+cat > "$scratch/cache.yml" <<'YAML'
+caches:
+  - name: git_snapshot
+    cache_key:
+      - env: GIT_SNAPSHOT_PREFIX
+      - env: GIT_SNAPSHOT_REPO
+        fallback_limit: true
+      - env: GIT_SNAPSHOT_PERIOD
+    target_paths:
+      - .git
+YAML
+
+git_cmd() {
+  git -c core.hooksPath=/dev/null -c gc.auto=0 "$@"
+}
+
+cache() {
+  buildkite-agent cache "$1" --cache-config-file "$scratch/cache.yml" \
+    --cache-fail-on-error --no-color
+}
+
+# Rebuild config instead of retaining job-local auth, paths, filters or helpers.
+configure_origin() {
+  rm -f .git/config || return
+  git_cmd config core.repositoryformatversion 0 || return
+  git_cmd config core.bare false || return
+  git_cmd config remote.origin.url "$repo" || return
+  git_cmd config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' || return
+  git_cmd config remote.origin.promisor true || return
+  git_cmd config remote.origin.partialclonefilter blob:none
+}
+
+fetch_checkout() {
+  local ref target fetch_start checkout_start
+  local -a fetch_flags=(--filter=blob:none)
+  fetch_start=$SECONDS
+  # A detached HEAD is not advertised by Git's default ref-based negotiation.
+  # Include it explicitly, including for snapshots saved by older versions.
+  if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
+    fetch_flags+=(--negotiation-tip=HEAD)
+  fi
+  ref="${BUILDKITE_REFSPEC:-}"
+  if [[ -z "$ref" && "${BUILDKITE_PULL_REQUEST:-false}" != false && -n "${BUILDKITE_PULL_REQUEST:-}" && "$repo" == *github.com* ]]; then
+    ref="refs/pull/${BUILDKITE_PULL_REQUEST}/head"
+    if [[ "${BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC:-false}" == true ]]; then
+      ref="refs/pull/${BUILDKITE_PULL_REQUEST}/merge"
+    fi
+  fi
+  if [[ -n "$ref" ]]; then
+    git_cmd fetch "${fetch_flags[@]}" -- origin "$ref" || return
+  elif [[ "$commit" == HEAD ]]; then
+    git_cmd fetch "${fetch_flags[@]}" -- origin "${BUILDKITE_BRANCH:-HEAD}" || return
+  else
+    git_cmd fetch "${fetch_flags[@]}" -- origin "$commit" || return
+  fi
+  if [[ "$commit" == HEAD ]]; then
+    target="$(git_cmd rev-parse --verify 'FETCH_HEAD^{commit}')" || return
+  else
+    # A force-pushed PR ref may no longer contain the build's pinned SHA.
+    if ! git_cmd cat-file -e "${commit}^{commit}"; then
+      git_cmd fetch "${fetch_flags[@]}" -- origin "$commit" || return
+    fi
+    target="$(git_cmd rev-parse --verify "${commit}^{commit}")" || return
+  fi
+  echo "git-snapshot: fetch seconds=$((SECONDS - fetch_start))"
+  checkout_start=$SECONDS
+  git_cmd -c checkout.workers="$workers" -c checkout.thresholdForParallelism=1 \
+    checkout --force --detach "$target" || return
+  echo "git-snapshot: checkout seconds=$((SECONDS - checkout_start))"
+  [[ "$(git_cmd rev-parse HEAD)" == "$target" ]]
+}
+
+cd "$scratch/snapshot"
+restore_start=$SECONDS
+hit=false
+created=0
+if cache restore && [[ -d .git && ! -L .git && -f .git/git-snapshot-created-at ]]; then
+  read -r created < .git/git-snapshot-created-at || created=0
+  if [[ "$created" =~ ^[0-9]+$ ]] && (( created > 0 && created <= now )); then
+    hit=true
+  fi
+fi
+echo "git-snapshot: restore hit=$hit seconds=$((SECONDS - restore_start))"
+
+checkout_start=$SECONDS
+if [[ "$hit" == true ]]; then
+  # Restores have no worktree, even when HEAD has not changed.
+  rm -f .git/index
+  if ! configure_origin || ! fetch_checkout; then
+    echo 'git-snapshot: snapshot unusable; retrying a fresh blobless checkout' >&2
+    hit=false
+  fi
+fi
+if [[ "$hit" == false ]]; then
+  # A failed checkout may have left partially materialized files as well as Git
+  # metadata. Do not carry either into the fresh retry.
+  find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+  git_cmd init .
+  configure_origin
+  fetch_checkout
+  created=0
+fi
+echo "git-snapshot: fetch+checkout seconds=$((SECONDS - checkout_start)) commit=$(git_cmd rev-parse HEAD)"
+
+# Checkout hydrates HEAD's blobs before saving. Never archive the worktree.
+if [[ "$refresh" == true ]] && (( now - created >= max_age )); then
+  git_cmd update-ref refs/heads/buildkite-snapshot HEAD
+  date +%s > .git/git-snapshot-created-at
+  save_start=$SECONDS
+  if ! cache save; then
+    echo 'git-snapshot: cache save failed; checkout remains usable' >&2
+  fi
+  echo "git-snapshot: save seconds=$((SECONDS - save_start))"
+fi
+
+if [[ "$refresh_only" == true ]]; then
+  echo 'git-snapshot: refresh-only; no worktree installed (use command: ":")'
+else
+  # The agent owns this dedicated checkout path. Remove tracked, ignored and
+  # untracked leftovers, including nested repositories, before installing it.
+  find "$checkout" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+  shopt -s dotglob nullglob
+  mv -- "$scratch/snapshot/"* "$checkout/"
+fi
+echo "git-snapshot: total seconds=$((SECONDS - started))"
+)
