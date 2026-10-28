@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "MIRROR_PROBE after path=${BUILDKITE_GIT_MIRRORS_PATH:-unset} skip=${BUILDKITE_GIT_MIRRORS_SKIP_UPDATE:-unset} repo_mirror=${BUILDKITE_REPO_MIRROR:-unset}"
+git -c core.hooksPath=/dev/null rev-parse HEAD

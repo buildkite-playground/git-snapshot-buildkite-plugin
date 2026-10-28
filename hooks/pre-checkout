@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Diagnostic branch only: exercise the real agent's hook environment import.
+echo "MIRROR_PROBE agent=$(buildkite-agent --version)"
+echo "MIRROR_PROBE before path=${BUILDKITE_GIT_MIRRORS_PATH:-unset} skip=${BUILDKITE_GIT_MIRRORS_SKIP_UPDATE:-unset}"
+_probe_mirror="${BUILDKITE_GIT_MIRRORS_PATH:-}/$(printf '%s' "$BUILDKITE_REPO" | LC_ALL=C sed 's/[^[:alnum:]]/-/g')"
+if [[ -e "$_probe_mirror" ]]; then
+  echo 'MIRROR_PROBE mirror existed before checkout'
+else
+  echo 'MIRROR_PROBE mirror absent before checkout'
+fi
+if [[ "${MIRROR_PROBE_MODE:-skip}" == skip ]]; then
+  export BUILDKITE_GIT_MIRRORS_SKIP_UPDATE=true
+else
+  export BUILDKITE_GIT_MIRRORS_PATH=''
+fi
+unset _probe_mirror
