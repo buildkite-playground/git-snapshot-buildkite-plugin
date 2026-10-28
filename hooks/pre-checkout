@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# shellcheck source=lib/snapshot.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/snapshot.sh"
+
+case "${BUILDKITE_CLEAN_CHECKOUT:-false}:${BUILDKITE_SKIP_CHECKOUT:-false}" in
+  false:false|0:0|false:0|0:false) ;;
+  *) echo 'git-snapshot: clean/skip checkout requested; leaving checkout to the agent'; exit 0 ;;
+esac
+if [[ -e "$checkout/.git" ]]; then
+  echo 'git-snapshot: existing checkout; leaving it to the agent'
+  exit 0
+fi
+
+scratch="$(mktemp -d)"
+trap 'rm -rf -- "$scratch"' EXIT
+mkdir "$scratch/snapshot"
+cache_config
+cd "$scratch/snapshot"
+started=$SECONDS
+hit=false
+created=0
+if cache restore && [[ -d .git && ! -L .git && -f .git/git-snapshot-created-at ]]; then
+  read -r created < .git/git-snapshot-created-at || created=0
+  if [[ "$created" =~ ^[0-9]+$ ]] && (( created > 0 && created <= now )) &&
+    [[ ! -e .git/shallow && ! -e .git/objects/info/alternates ]] &&
+    GIT_ALLOW_PROTOCOL='' git_cmd cat-file -e 'HEAD^{tree}'; then
+    hit=true
+  fi
+fi
+if [[ "$hit" == false ]]; then
+  rm -rf .git
+  git_cmd init --template= .
+else
+  # Never reuse an index: an unchanged HEAD must still materialize every file.
+  rm -f .git/index
+fi
+configure_origin
+# Repair old detached-HEAD snapshots too: plain agent fetch must advertise history.
+if [[ "$hit" == true ]]; then
+  git_cmd update-ref refs/heads/buildkite-snapshot "$(git_cmd rev-parse HEAD)"
+fi
+mkdir -p "$checkout"
+mv .git "$checkout/.git"
+echo "git-snapshot: restore hit=$hit seconds=$((SECONDS - started)); agent owns fetch and checkout"
