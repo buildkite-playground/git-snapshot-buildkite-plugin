@@ -38,6 +38,11 @@ pipeline mirror-path setting or a pipeline `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE`
 value cannot override the hosted protected settings. Do not use its controlled
 bootstrap timings as an unmodified hosted-job claim.
 
+The Chromium experiment also encountered a large extra fetch and autopack after
+restoring the pre/post snapshot; that warm run was canceled. Its snapshot rebuild
+does not preserve the original branch/tag refs. This variant is not qualified as
+a fast path for large, heavily tagged repositories, even with mirrors off.
+
 **Tradeoff:** the default custom checkout does not inherit the agent's Git
 clone/fetch/clean flags, branch-membership verification, sparse checkout,
 submodule or LFS orchestration. Agent `fail-closed` commit verification rejects
@@ -90,6 +95,11 @@ period are one day; `max-age` may be shortened but cannot exceed one day. Keep
 at least one trusted job running daily if you want to avoid idle expiry. The
 first job after expiry still works, but pays for a fresh blobless fetch.
 
+Snapshots retain blobs hydrated by earlier refreshes and can grow over time.
+Changing `key-prefix` forces a fresh blobless seed if you need to discard that
+accumulated data; expiration of old Cache entries alone does not shrink a newer
+snapshot derived from them.
+
 For a scheduled refresh pipeline, schedule this step daily (or more often):
 
 ```yaml
@@ -133,6 +143,20 @@ restore. `refresh: false` is useful for consumers, but is not an access policy.
 Registry scopes may prevent sharing across pipelines or branches even when keys
 match. Do not cache secrets. This plugin does not use cache volumes or change
 cluster settings.
+
+## Hosted measurements
+
+On Chromium's public GitHub mirror (512,501 tracked entries, 1,853,106 commits),
+11 warm snapshots had a **65.7s median / 68.3s p90**, including plugin setup,
+restore, fetch and checkout. Eight samples overlapped on separate hosted-large
+agents. Single default-clone/blobless-clone baselines were 1762.3s/715.6s;
+these are practical checkout strategies, not equal-object transfer comparisons.
+The snapshot archive was 5.77 GB. A newer revision restored, fetched its delta,
+checked out and refreshed the snapshot in 129.5s (one sample).
+
+See [methodology, raw samples and limitations](benchmarks/README.md) before using
+these numbers. In particular, controlled comparisons disable mirrors; the real
+hosted-job check with protected mirror settings unchanged is reported separately.
 
 ## Development
 
