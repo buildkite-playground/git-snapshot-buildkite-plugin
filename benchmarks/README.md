@@ -1,8 +1,9 @@
 # Earlier hosted checkout measurements — 2026-10-28
 
-This is the earlier round, using the **checkout hook**. The current plugin
-defaults to mirror-aware pre/post hooks; do not read this report's historical
-design choice as the current default. See the main README for current behavior.
+This is the earlier round, using the plugin's **checkout hook**. That mode has
+since been removed: the plugin no longer performs checkouts, and the agent always
+checks out after the plugin's pre-checkout restore. These numbers are kept as
+history, not as a recommendation. See the main README for current behavior.
 The tested final revision is
 [`5bfe21e`](https://github.com/buildkite-playground/git-snapshot-buildkite-plugin/commit/5bfe21e2783db5316a6352ff3ac1ddb1ac412634).
 Its hook is identical to the preceding

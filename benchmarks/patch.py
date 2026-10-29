@@ -22,7 +22,6 @@ parser.add_argument("--prefix", required=True)
 parser.add_argument("--label", required=True)
 parser.add_argument("--commit", required=True, help="Full SHA, or HEAD with --branch")
 parser.add_argument("--branch", default="master")
-parser.add_argument("--mode", choices=["agent", "checkout"], default="agent")
 parser.add_argument("--treeless", action="store_true")
 parser.add_argument("--read-only", action="store_true")
 parser.add_argument("--max-age", type=int)
@@ -47,7 +46,7 @@ trace2 = result_dir / "trace2.json"
 curl_trace = result_dir / "curl.log"
 
 config = {"key-prefix": args.prefix, "refresh": not args.read_only,
-          "treeless": args.treeless, "mode": args.mode}
+          "treeless": args.treeless}
 if args.max_age:
     config["max-age"] = args.max_age
 env = dict(os.environ, BUILDKITE_SKIP_CHECKOUT="false", TMPDIR=str(temporary),
@@ -100,20 +99,13 @@ t_restore, restore_line = first(r"git-snapshot: restore hit=")
 t_patch, patch_line = first(r"git-snapshot: patch hit=")
 t_post, _ = first(r"^\$ .*/hooks/post-checkout$")
 t_prepare, _ = first(r"^~~~ Preparing working directory", after=t_restore or 0.0)
-t_fetched, _ = first(r"git-snapshot: fetch\+checkout seconds=")
-t_total, _ = first(r"git-snapshot: total seconds=")
 timeline = [{"t": round(t, 3), "line": line} for t, line in lines if re.search(
     r"git-snapshot:|Cache restored|No cache|Restoring cache|Saving cache|Cache saved|"
     r"already exists|skipping fetch|^\$ git|^~~~ |Changes to some env vars", line)]
 
-if args.mode == "agent":
-    # Everything after the post-checkout hook starts is patch/snapshot saving.
-    checkout_seconds = t_post if t_post is not None else bootstrap_seconds
-    save_seconds = bootstrap_seconds - checkout_seconds
-else:
-    # Checkout mode saves inside its hook, between these two plugin lines.
-    save_seconds = (t_total - t_fetched) if t_fetched is not None and t_total is not None else 0.0
-    checkout_seconds = bootstrap_seconds - save_seconds
+# Everything after the post-checkout hook starts is patch/snapshot saving.
+checkout_seconds = t_post if t_post is not None else bootstrap_seconds
+save_seconds = bootstrap_seconds - checkout_seconds
 
 # Upstream requests: HTTP requests to the target repository, and the Git sessions behind them.
 requests = []
@@ -138,7 +130,7 @@ for sid, state in processes.items():
         sessions.append({"root": chain[0].get("argv", [])[1:] if chain else [],
                          "chain": [c.get("name") for c in chain]})
 
-result = {"label": args.label, "plugin": args.plugin, "prefix": args.prefix, "mode": args.mode,
+result = {"label": args.label, "plugin": args.plugin, "prefix": args.prefix,
           "treeless": args.treeless, "read_only": args.read_only, "max_age": args.max_age,
           "verification": args.verification, "agent_skip_fetch": args.agent_skip_fetch,
           "requested_commit": args.commit,
@@ -149,8 +141,7 @@ result = {"label": args.label, "plugin": args.plugin, "prefix": args.prefix, "mo
           "plugin_setup_and_restore_seconds": t_restore,
           "snapshot_restore_seconds": (t_restore - t_pre) if None not in (t_restore, t_pre) else None,
           "patch_restore_apply_seconds": (t_patch - t_restore) if None not in (t_patch, t_restore) else None,
-          "agent_checkout_seconds": (t_post - t_prepare)
-              if args.mode == "agent" and None not in (t_post, t_prepare) else None,
+          "agent_checkout_seconds": (t_post - t_prepare) if None not in (t_post, t_prepare) else None,
           "restore": restore_line, "patch": patch_line,
           "patch_hit": None if patch_line is None else "hit=true" in patch_line,
           "patch_bytes": number(r"patch hit=true .*bytes=(\d+)"),

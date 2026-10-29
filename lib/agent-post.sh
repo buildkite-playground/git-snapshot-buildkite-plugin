@@ -38,7 +38,13 @@ if [[ -f .git/git-snapshot-created-at ]]; then
   read -r created < .git/git-snapshot-created-at || created=0
 fi
 [[ "$created" =~ ^[0-9]+$ ]] || created=0
-(( now - created >= max_age )) || exit 0
+# Ordinary jobs refresh a snapshot once it is max-age old. A refresh-only job also
+# refreshes one from an earlier key period, so a daily schedule saves every period.
+if [[ "$refresh_only" == true ]]; then
+  (( created < now / max_age * max_age )) || exit 0
+else
+  (( now - created >= max_age )) || exit 0
+fi
 
 started=$SECONDS
 # Copy objects only, not agent credentials, hooks, sparse config, LFS or submodules.

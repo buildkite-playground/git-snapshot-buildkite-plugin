@@ -17,7 +17,6 @@ parser.add_argument("--prefix", required=True)
 parser.add_argument("--max-age", type=int, default=86400)
 parser.add_argument("--read-only", action="store_true")
 parser.add_argument("--treeless", action="store_true")
-parser.add_argument("--checkout-mode", choices=["agent", "checkout"], default="agent")
 parser.add_argument("--probes", help="Repository-relative path for independent history probes")
 args = parser.parse_args()
 partial_filter = "tree:0" if args.treeless else "blob:none"
@@ -41,8 +40,7 @@ env["BUILDKITE_GIT_MIRRORS_PATH"] = ""
 env["BUILDKITE_PLUGINS"] = json.dumps([
     {"github.com/buildkite-playground/git-snapshot-buildkite-plugin#" + args.plugin_ref: {
         "key-prefix": args.prefix, "max-age": args.max_age,
-        "refresh": not args.read_only, "treeless": args.treeless,
-        "mode": args.checkout_mode}}
+        "refresh": not args.read_only, "treeless": args.treeless}}
 ]) if args.mode == "snapshot" else "[]"
 command = ["buildkite-agent", "bootstrap", "--phases=plugin,checkout",
            "--git-mirrors-path=", "--git-mirrors-skip-update=true",
@@ -61,9 +59,9 @@ def watch_archives():
     opened = {}
     seen = set()
     while not stop.wait(0.1):
-        # Only Cache staging paths: the checkout hook also materializes its
-        # worktree under TMPDIR. Walking that tree would perturb its timing
-        # and mistake repository ZIP/JAR fixtures for Cache archives.
+        # Only Cache staging paths: the removed checkout mode materialized its
+        # worktree under TMPDIR. Walking that tree perturbed its timing and
+        # mistook repository ZIP/JAR fixtures for Cache archives.
         for path in [*temporary.glob("*.zip"), *temporary.glob("zstash-restore*/*")]:
             if path in opened or path in seen:
                 continue
@@ -107,7 +105,7 @@ seconds = time.monotonic() - start
 stop.set()
 watcher.join()
 result = {"mode": args.mode, "plugin_ref": args.plugin_ref, "prefix": args.prefix,
-          "treeless": args.treeless, "checkout_mode": args.checkout_mode,
+          "treeless": args.treeless,
           "read_only": args.read_only, "max_age": args.max_age,
           "build_url": os.environ["BUILDKITE_BUILD_URL"], "job_id": os.environ["BUILDKITE_JOB_ID"],
           "repo": os.environ["BUILDKITE_REPO"], "requested_commit": os.environ["BUILDKITE_COMMIT"],

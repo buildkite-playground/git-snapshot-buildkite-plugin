@@ -117,8 +117,8 @@ Linux methodology difference and warm-cache condition are in the README caption.
 
 ## Old snapshot, newer commit — checkout without save
 
-These Chromium tests deliberately use **plugin-owned `mode: checkout`** in the
-controlled bootstrap. They are not pooled with the default pre/post warm set.
+These Chromium tests deliberately use **plugin-owned `mode: checkout`**, a mode
+since removed, in the controlled bootstrap. They are not pooled with the default pre/post warm set.
 The stale seeds fetch only the old pinned ancestry, rather than cloning all
 current branch refs, which would already contain the supposedly newer commit.
 Their archives are consequently a different object set: 5,777,056,968 bytes
@@ -205,7 +205,7 @@ needed at job time. Smaller archives do not make missing history free.
 
 ## Hosted mirror compatibility
 
-Default mode now skips **both restore and save** when
+The plugin skips **both restore and save** when
 `BUILDKITE_GIT_MIRRORS_PATH` is nonempty. The successful native control in
 [Linux pipeline build 37](https://buildkite.com/buildkite/temporary-large-linux-checkout-benchmark-20261026-ming/builds/37)
 used this public plugin repository, the real agent checkout and unchanged
@@ -227,11 +227,11 @@ Earlier hook opt-out diagnostics in
 showed that the agent protected both mirror-path and skip-update variables.
 Source inspection confirms skip-update would also prevent mirror creation if
 accepted, but these hosted hooks cannot set it. The default design therefore
-never tries. Snapshot acceleration in default mode requires mirrors off;
-`mode: checkout` remains explicit opt-in when that is not possible, with its
-documented loss of agent checkout orchestration.
+never tries. Snapshot acceleration requires mirrors off. At the tested revision,
+`mode: checkout` was an explicit opt-in for agents with mirrors; that mode has
+since been removed, and the plugin no longer performs checkouts.
 
-The explicit opt-in also passed a native mirrors-on small-repository control in
+The removed checkout mode also passed a native mirrors-on small-repository control in
 [build 40](https://buildkite.com/buildkite/temporary-large-linux-checkout-benchmark-20261026-ming/builds/40),
 with the agent's normal checkout skipped and a clean, independent partial clone.
 Its first control attempt (build 39) used an abbreviated API commit ID that the

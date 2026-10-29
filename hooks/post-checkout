@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-if [[ "${BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE:-agent}" == agent ]]; then
-  if [[ -n "${BUILDKITE_GIT_MIRRORS_PATH:-}" ]]; then
-    echo 'git-snapshot: Git mirrors enabled; skipping snapshot save'
-  else
-    bash "$(dirname "${BASH_SOURCE[0]}")/../lib/agent-post.sh" || exit "$?"
-  fi
+if [[ -n "${BUILDKITE_GIT_MIRRORS_PATH:-}" ]]; then
+  echo 'git-snapshot: Git mirrors enabled; skipping snapshot save'
+else
+  bash "$(dirname "${BASH_SOURCE[0]}")/../lib/agent-post.sh" || exit "$?"
 fi

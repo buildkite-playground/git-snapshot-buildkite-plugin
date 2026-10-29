@@ -1,8 +1,10 @@
 # Git Snapshot Buildkite Plugin
 
 Speed up large-repository checkouts by restoring a treeless, full-history `.git`
-from Buildkite Cache, fetching changes and checking out with eight parallel
-workers. Only Git metadata is cached, never the worktree.
+from Buildkite Cache before the agent checks out. The agent then fetches only new
+commits, or nothing when a per-commit patch is cached, and checks out with eight
+parallel workers. The plugin never performs the checkout itself. Only Git
+metadata is cached, never the worktree.
 
 ![Checkout without vs with Git Snapshot: Chromium 29m 22s vs 33s; Linux 4m 17s vs 11s](benchmarks/checkout-times.svg)
 
@@ -47,9 +49,9 @@ single-sample probes. [Details](benchmarks/treeless.md#lazy-history-operations).
 
 ## Git mirrors
 
-**With Git mirrors enabled (`BUILDKITE_GIT_MIRRORS_PATH` nonempty), the default
-mode skips both restore and save.** To use snapshots on hosted agents, disable
-Git mirror volumes on the cluster, or opt into `mode: checkout` below. The plugin
+**With Git mirrors enabled (`BUILDKITE_GIT_MIRRORS_PATH` nonempty), the plugin
+skips both restore and save**, and the agent checks out as usual. To use
+snapshots on hosted agents, disable Git mirror volumes on the cluster. The plugin
 does not change protected mirror settings or use cache volumes.
 
 ## Options
@@ -58,17 +60,14 @@ does not change protected mirror settings or use cache volumes.
 | --- | --- | --- |
 | `treeless` | `true` | Use `tree:0`; set `false` for blobless (`blob:none`) path-history jobs. |
 | `checkout-workers` | `8` | Number of parallel checkout workers. |
-| `mode` | `agent` | Agent-owned checkout; `checkout` replaces it (see below). |
 | `max-age` | `86400` | Refresh age and key period in seconds, 1–86400. |
 | `refresh` | `true` | Save missing or stale snapshots. `false` makes Cache use read-only. |
-| `refresh-only` | `false` | Refresh job; pair with `command: ":"`. |
+| `refresh-only` | `false` | Scheduled refresh job; pair with `command: ":"` (see below). |
 | `patches` | `true` | Restore and save per-commit patches (see below). |
 | `key-prefix` | `git-snapshot-v3` | Cache namespace; change to re-seed snapshots. |
 
-`mode: checkout` works without disabling mirrors, but does not inherit the
-agent's clone/fetch/clean flags, branch verification, sparse checkout, submodules
-or LFS handling. It replaces everything in the dedicated checkout directory,
-including ignored files. Use full commit SHAs for API-triggered builds.
+The `mode` option has been removed: the agent always performs the checkout. A
+leftover `mode` setting only logs a warning.
 
 ## Refreshing snapshots
 
@@ -77,7 +76,9 @@ write-once period keys. Keys include the repo URL and filter, so treeless and
 blobless snapshots never mix. Save failures do not fail a usable checkout.
 
 Cache entries expire three days after creation or their last exact restore;
-fallback restores do not extend this. Run a trusted job daily, or schedule:
+fallback restores do not extend this. A job refreshes a snapshot once it is
+`max-age` old. To refresh on a schedule, run a trusted job daily with
+`refresh-only`:
 
 ```yaml
 steps:
@@ -87,8 +88,11 @@ steps:
           refresh-only: true
 ```
 
-Use the same repo URL, key settings and Cache scope as consumer jobs.
-`refresh-only` still materializes HEAD; it does not skip the command.
+A `refresh-only` job also refreshes a snapshot saved in an earlier key period
+(a UTC day with the default `max-age`), so a daily schedule saves every day even
+when the last run was a few minutes less than a day ago. The agent still checks
+out the build's commit, and the command still runs. Use the same repo URL, key
+settings and Cache scope as consumer jobs.
 
 ## Patch cache: one upstream fetch per commit, not per job
 
@@ -114,7 +118,7 @@ fetching. Set `patches: false` to turn this off.
 
 ### Let the agent skip its fetch
 
-In `mode: agent`, the agent fetches the commit again unless
+The agent fetches the commit again unless
 `git-skip-fetch-existing-commits` is on (agent 3.119.0+, no experiment flag).
 The pre-checkout hook exports `BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=true`
 for a job whose commit is local after restore, and `false` for one whose commit
@@ -138,13 +142,12 @@ Skip-fetch does not cover branch verification. With `git-commit-verification`
 once per job to check the commit is on the branch. It skips that for `HEAD`,
 tag, pull request and custom-refspec builds, or with `git-commit-verification=off`.
 `git-fetch-base-branch` (off by default) also fetches regardless. The plugin
-leaves these alone. `mode: checkout` does not verify branches, and does no fetch
-at all on a hit.
+leaves these alone.
 
 On Linux with hosted agents, a 1 + 8 job build dropped from 45 upstream Git
-sessions (108 HTTP requests) to 13 (52) in agent mode, and from 36 (63) to 4 (7)
-in checkout mode. Each agent-mode hit's one remaining session is branch
-verification. [Details](benchmarks/patch-cache.md).
+sessions (108 HTTP requests) to 13 (52). Each hit's one remaining session is
+branch verification; hits with verification off made none.
+[Details](benchmarks/patch-cache.md).
 
 ## Notes
 
@@ -154,10 +157,9 @@ verification. [Details](benchmarks/patch-cache.md).
 * Cache policies must prevent untrusted PRs from saving snapshots or patches
   trusted jobs restore. `refresh: false` (which also stops patch saves) is not an
   access policy. Never cache secrets.
-* Agent mode leaves existing checkouts alone; `BUILDKITE_CLEAN_CHECKOUT=true`
+* The plugin leaves existing checkouts alone; `BUILDKITE_CLEAN_CHECKOUT=true`
   bypasses seeding. Shallow or mirror-dependent checkouts are not saved.
-* Submodule data and LFS downloads are not cached. In checkout mode, initialize
-  submodules yourself with `git submodule update --init --recursive`.
+* Submodule data and LFS downloads are not cached.
 
 ## Development
 

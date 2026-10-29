@@ -2,10 +2,13 @@
 
 With the patch cache, a Linux build of one job plus eight parallel jobs on a commit
 newer than the snapshot made **13 upstream Git sessions (52 HTTP requests)
-instead of 45 (108)** in the default agent mode. In checkout mode it made
-**4 (7) instead of 36 (63)**. Each agent-mode patch hit still makes one session:
-the agent's branch verification fetch. With verification off, a hit made none.
-Checkout time did not get worse. All 79 measured jobs passed correctness checks.
+instead of 45 (108)**. Each patch hit still makes one session: the agent's
+branch verification fetch. With verification off, a hit made none. Checkout time
+did not get worse. All 79 measured jobs passed correctness checks.
+
+Rows labelled "checkout mode" measured the plugin's `mode: checkout`, which
+performed the checkout itself. That mode was removed after this report; the agent
+now always checks out. Those rows are kept as history only.
 
 ## Method
 
@@ -26,7 +29,8 @@ branch verification (`verify`), and lazy fetches during checkout (`lazy`). The
 agent's own fetches are included.
 
 Checkout time runs from bootstrap start to the post-checkout hook in agent mode.
-In checkout mode it is the bootstrap time minus the plugin's save interval.
+In the removed checkout mode it was the bootstrap time minus the plugin's save
+interval.
 Patch and snapshot saves are excluded and reported separately. Snapshot restore,
 patch restore and apply, and the agent's checkout phase come from timestamped log
 lines.
@@ -56,8 +60,8 @@ Treeless snapshots. The first job runs, then eight run in parallel.
 | Before, agent mode @T1 | 9 × (fetch, verify, 3 lazy) | 45 | 108 |
 | After, agent mode @T1 | 1 miss (5 sessions, 12 HTTP) + 8 hits (1, 5 each) | **13** | **52** |
 | After, agent mode, verification off | 1 miss + 8 hits (0 each)¹ | 5 | 12 |
-| Before, checkout mode @T1 | 9 × (fetch, 3 lazy) | 36 | 63 |
-| After, checkout mode @T2 | 1 miss (4, 7) + 8 hits (0 each) | **4** | **7** |
+| Before, checkout mode (removed) @T1 | 9 × (fetch, 3 lazy) | 36 | 63 |
+| After, checkout mode (removed) @T2 | 1 miss (4, 7) + 8 hits (0 each) | 4 | 7 |
 | After, agent mode, HEAD first job | 1 HEAD job (4, 7) + 8 hits (1, 4 each) | 12 | 39 |
 
 ¹ Projected from measured jobs: two verification-off hits (builds 43 and 44)
@@ -76,8 +80,8 @@ Medians, with ranges in brackets. Checkout time excludes saves.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Before, agent mode | 9 | 10.11s [9.30–14.04] | 4.70s | — | 5.12s |
 | After, agent hit | 16 | 9.98s [8.09–13.10] | 5.33s | 0.74s [0.46–0.90] | 3.59s |
-| Before, checkout mode | 9 | 9.51s [8.46–12.72] | 5.91s | — | — |
-| After, checkout-mode hit | 8 | 7.64s [7.09–11.61] | 4.44s | 0.88s [0.55–1.42] | — |
+| Before, checkout mode (removed) | 9 | 9.51s [8.46–12.72] | 5.91s | — | — |
+| After, checkout-mode hit (removed) | 8 | 7.64s [7.09–11.61] | 4.44s | 0.88s [0.55–1.42] | — |
 | After, HEAD-build hits | 8 | 8.68s [7.78–10.04] | | | |
 | After, blobless agent hits | 3 | 18.10s [16.86–20.41] | | | |
 
@@ -145,7 +149,7 @@ is not byte-for-byte reproducible.
   an ancestor of T1, so the commit was already local. The agent skipped its fetch,
   and checkout lazily fetched T2's trees and blobs. The saved `[S′, T2]` patch
   then served two hits at 2 HTTP requests and 1 session each.
-* **Checkout mode.** Hits made no upstream requests at all.
+* **Checkout mode (removed).** Hits made no upstream requests at all.
 
 ## Correctness
 
@@ -164,8 +168,10 @@ each job's `result.json` artifact.
 
 ## Tested code and excluded numbers
 
-Builds 45 and 46 ran the committed plugin. The only difference was the wording
-of one pre-checkout warning.
+Builds 45 and 46 ran the plugin as committed in
+[`2bf8466`](https://github.com/buildkite-playground/git-snapshot-buildkite-plugin/commit/2bf84665cb4c40e988f4b1f353d48e75ec5a0bec).
+The only difference was the wording of one pre-checkout warning. The checkout-mode
+rows used `patch.py --mode checkout`; that option went with the mode.
 
 Build 44 ran an earlier presence check, `cat-file -e`, that used the same slow
 Git 2.43 lookup as the agent. It added about 18s to treeless misses and 113s to

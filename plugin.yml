@@ -1,5 +1,5 @@
 name: Git Snapshot
-description: Restore a treeless Git snapshot from Buildkite Cache and check out with parallel workers
+description: Restore a treeless Git snapshot and per-commit patches from Buildkite Cache before the agent's checkout
 author: https://github.com/buildkite-playground
 requirements:
   - bash
@@ -7,11 +7,6 @@ requirements:
   - buildkite-agent
 configuration:
   properties:
-    mode:
-      type: string
-      enum: [checkout, agent]
-      default: agent
-      description: Agent mode skips snapshots when mirrors are enabled; checkout is explicit opt-in
     treeless:
       type: boolean
       default: true
@@ -36,7 +31,7 @@ configuration:
     refresh-only:
       type: boolean
       default: false
-      description: Refresh job; checkout mode installs no worktree; pair with command ':'
+      description: Scheduled refresh job; saves whenever the snapshot is from an earlier key period; pair with command ':'
     key-prefix:
       type: string
       minLength: 1
