@@ -29,6 +29,10 @@ configuration:
     refresh:
       type: boolean
       default: true
+    patches:
+      type: boolean
+      default: true
+      description: Cache per-commit patches from the snapshot so later jobs skip upstream fetches
     refresh-only:
       type: boolean
       default: false

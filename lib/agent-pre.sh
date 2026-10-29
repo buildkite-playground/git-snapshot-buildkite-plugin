@@ -46,11 +46,29 @@ else
   rm -f .git/index
 fi
 configure_origin
-# Repair old detached-HEAD snapshots too: plain agent fetch must advertise history.
+echo "git-snapshot: restore hit=$hit seconds=$((SECONDS - started)); agent owns checkout"
 if [[ "$hit" == true ]]; then
-  git_cmd update-ref refs/heads/buildkite-snapshot "$(git_cmd rev-parse HEAD)"
+  base="$(git_cmd rev-parse HEAD)"
+  # Repair old detached-HEAD snapshots too: plain agent fetch must advertise history.
+  git_cmd update-ref refs/heads/buildkite-snapshot "$base"
+  commit="${BUILDKITE_COMMIT:-HEAD}"
+  # A pinned commit may arrive in its patch. Otherwise, including HEAD and branch
+  # builds, post-checkout saves a patch for the commit the agent checked out.
+  if [[ "$patches" == true && "$commit" != "$base" ]] &&
+     { [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]] || ! restore_patch "$base" "$commit"; }; then
+    echo "$base" > .git/git-snapshot-patch-base
+  fi
+fi
+# Tell the hook whether the agent may skip its fetch: only for an exact local commit.
+# rev-list --missing never tries a lazy fetch. Git 2.43's other lookups scan every
+# promisor object after refusing one: ~20s (blobless ~110s) for a missing Linux commit.
+if [[ "${BUILDKITE_COMMIT:-}" =~ ^[0-9a-f]{40}$ ]]; then
+  if offline git_cmd rev-list --missing=print --no-walk "$BUILDKITE_COMMIT^{commit}" >/dev/null 2>&1; then
+    echo present > .git/git-snapshot-commit
+  else
+    echo missing > .git/git-snapshot-commit
+  fi
 fi
 mkdir -p "$checkout"
 mv .git "$checkout/.git"
-echo "git-snapshot: restore hit=$hit seconds=$((SECONDS - started)); agent owns fetch and checkout"
 )

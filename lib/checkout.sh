@@ -48,11 +48,33 @@ fetch_checkout() {
     target="$(git_cmd rev-parse --verify "${commit}^{commit}")" || return
   fi
   echo "git-snapshot: fetch seconds=$((SECONDS - fetch_start))"
-  checkout_start=$SECONDS
+  checkout_target "$target"
+}
+
+checkout_target() {
+  local checkout_start=$SECONDS
   git_cmd -c checkout.workers="$workers" -c checkout.thresholdForParallelism=1 \
-    checkout --force --detach "$target" || return
+    checkout --force --detach "$1" || return
   echo "git-snapshot: checkout seconds=$((SECONDS - checkout_start))"
-  [[ "$(git_cmd rev-parse HEAD)" == "$target" ]]
+  [[ "$(git_cmd rev-parse HEAD)" == "$1" ]]
+}
+
+# A pinned commit that is the snapshot itself, or arrives in its Cache patch,
+# needs no fetch at all. After a fetch, patch_base asks for a patch to be saved.
+snapshot_checkout() {
+  local base
+  # Restores have no worktree, even when HEAD has not changed.
+  rm -f .git/index
+  base="$(git_cmd rev-parse --verify -q HEAD)" || base=''
+  configure_origin || return
+  if [[ "$patches" == true && -n "$base" && "$commit" =~ ^[0-9a-f]{40}$ ]] &&
+     { [[ "$commit" == "$base" ]] || restore_patch "$base" "$commit"; }; then
+    echo 'git-snapshot: commit is local; no fetch'
+    checkout_target "$commit"
+  else
+    fetch_checkout || return
+    patch_base="$base"
+  fi
 }
 
 cd "$scratch/snapshot"
@@ -68,13 +90,11 @@ fi
 echo "git-snapshot: restore hit=$hit seconds=$((SECONDS - restore_start))"
 
 checkout_start=$SECONDS
-if [[ "$hit" == true ]]; then
-  # Restores have no worktree, even when HEAD has not changed.
-  rm -f .git/index
-  if ! configure_origin || ! fetch_checkout; then
-    echo 'git-snapshot: snapshot unusable; retrying a fresh partial checkout' >&2
-    hit=false
-  fi
+patch_base=''
+if [[ "$hit" == true ]] && ! snapshot_checkout; then
+  echo 'git-snapshot: snapshot unusable; retrying a fresh partial checkout' >&2
+  hit=false
+  patch_base=''
 fi
 if [[ "$hit" == false ]]; then
   # A failed checkout may have left partially materialized files as well as Git
@@ -86,6 +106,11 @@ if [[ "$hit" == false ]]; then
   created=0
 fi
 echo "git-snapshot: fetch+checkout seconds=$((SECONDS - checkout_start)) commit=$(git_cmd rev-parse HEAD)"
+
+# Later jobs for this commit, including the one a HEAD build resolved, then skip the fetch.
+if [[ -n "$patch_base" ]] && ! save_patch "$patch_base" "$(git_cmd rev-parse HEAD)"; then
+  echo 'git-snapshot: patch save failed; checkout remains usable' >&2
+fi
 
 # Checkout hydrates HEAD's blobs before saving. Never archive the worktree.
 if [[ "$refresh" == true ]] && (( now - created >= max_age )); then

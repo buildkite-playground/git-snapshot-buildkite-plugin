@@ -36,7 +36,7 @@ assert_checkout() {
   [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" rev-parse HEAD)" = "$1" ]
   [ -z "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" status --porcelain)" ]
   [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" config remote.origin.promisor)" = true ]
-  [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" config remote.origin.partialclonefilter)" = blob:none ]
+  [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" config remote.origin.partialclonefilter)" = "${2:-blob:none}" ]
   [ ! -e "$BUILDKITE_BUILD_CHECKOUT_PATH/.git/objects/info/alternates" ]
   [ "$(git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" rev-parse --is-shallow-repository)" = false ]
 }
@@ -84,7 +84,7 @@ assert_checkout() {
 
 rg_count_saves() {
   # No ripgrep dependency in the plugin-tester image.
-  grep -c '^save ' "$TEST_CACHE/operations"
+  grep -c "^save ${1:-snapshot} " "$TEST_CACHE/operations"
 }
 
 @test "stale fallback fetches a newer commit and saves the current period" {
@@ -257,4 +257,111 @@ rg_count_saves() {
   [ "$BUILDKITE_SKIP_CHECKOUT" = false ]
   [ ! -e "$BUILDKITE_BUILD_CHECKOUT_PATH/.git" ]
   [ ! -e "$TEST_CACHE/operations" ]
+}
+
+offline_git() {
+  GIT_NO_LAZY_FETCH=1 GIT_ALLOW_PROTOCOL= git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" "$@"
+}
+
+checkout_mode_patch_round_trip() {
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_TREELESS="$1"
+  "$hook"
+  printf 'third contents\n' > "$source_repo/file"
+  git -C "$source_repo" commit -qam third
+  newest="$(git -C "$source_repo" rev-parse HEAD)"
+  export BUILDKITE_COMMIT="$newest"
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'restore hit=true'* && "$output" == *'patch hit=false'* ]]
+  [ "$(rg_count_saves patch)" -eq 1 ]
+  # Any contact with origin now fails, so a pass proves the hit stayed local.
+  mv "$source_repo" "$source_repo.unreachable"
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'patch hit=true'* && "$output" == *'commit is local; no fetch'* ]]
+  [[ "$output" != *'snapshot unusable'* ]]
+  assert_checkout "$newest" "$2"
+  [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/file")" = 'third contents' ]
+  [ "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/added")" = 'second file' ]
+  [ "$(rg_count_saves patch)" -eq 1 ]
+  # Omitted objects are promised by the patch pack, so integrity checks still pass.
+  offline_git fsck --connectivity-only --no-dangling
+  # Like the snapshot, the intermediate commit's blob stays promised. Its tree is
+  # carried only by blobless patches; treeless leaves it promised too.
+  run offline_git cat-file -e "$(git -C "$source_repo.unreachable" rev-parse "$latest:file")"
+  [ "$status" -ne 0 ]
+  run offline_git cat-file -e "$(git -C "$source_repo.unreachable" rev-parse "$latest^{tree}")"
+  [ "$status" "$3" 0 ]
+}
+
+@test "checkout mode: a patch miss saves, the next job checks out offline (blobless)" {
+  checkout_mode_patch_round_trip false blob:none -eq
+}
+
+@test "checkout mode: a patch miss saves, the next job checks out offline (treeless)" {
+  checkout_mode_patch_round_trip true tree:0 -ne
+}
+
+@test "corrupt or incomplete patches fall back to origin with an exact checkout" {
+  "$hook"
+  export BUILDKITE_COMMIT="$latest"
+  "$hook"
+  bundle="$(find "$TEST_CACHE/patch" -name git-snapshot.bundle)"
+  # Valid bundle and prerequisites, but none of the target's new blobs.
+  git -C "$source_repo" bundle create -q "$bundle" --filter=blob:none main "^$old"
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'patch hit=false'* ]]
+  assert_checkout "$latest"
+  printf 'not a bundle\n' > "$bundle"
+  run "$hook"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'patch hit=false'* ]]
+  assert_checkout "$latest"
+}
+
+@test "agent mode: a HEAD build saves under the resolved commit; later jobs skip the agent fetch" {
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE=agent
+  git -C "$source_repo" reset -q --hard "$old"
+  source "$hook"
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" checkout -qf "$old"
+  source "$BATS_TEST_DIRNAME/../hooks/post-checkout"
+  # Each source of a hook from here on is a separate job.
+  rm -rf "$BUILDKITE_BUILD_CHECKOUT_PATH"
+  unset BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS
+  git -C "$source_repo" reset -q --hard "$latest"
+  # The first job of a build may only know the branch.
+  export BUILDKITE_COMMIT=HEAD
+  source "$hook"
+  [ -z "${BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS:-}" ]
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" fetch -q origin main
+  git -C "$BUILDKITE_BUILD_CHECKOUT_PATH" checkout -qf FETCH_HEAD
+  source "$BATS_TEST_DIRNAME/../hooks/post-checkout"
+  [ "$(rg_count_saves patch)" -eq 1 ]
+  rm -rf "$BUILDKITE_BUILD_CHECKOUT_PATH"
+  mv "$source_repo" "$source_repo.unreachable"
+  export BUILDKITE_COMMIT="$latest"
+  source "$hook"
+  [ "$BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS" = true ]
+  # What the agent does when it skips its fetch.
+  offline_git checkout -qf "$latest"
+  assert_checkout "$latest"
+}
+
+@test "agent mode turns off agent skip-fetch for a commit the restore lacks" {
+  export BUILDKITE_PLUGIN_GIT_SNAPSHOT_MODE=agent BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=true
+  git -C "$source_repo" reset -q --hard "$old"
+  export BUILDKITE_COMMIT="$latest"
+  source "$hook"
+  [ -d "$BUILDKITE_BUILD_CHECKOUT_PATH/.git" ]
+  [ "$BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS" = false ]
+}
+
+@test "patches: false neither restores nor saves patches" {
+  "$hook"
+  export BUILDKITE_COMMIT="$latest" BUILDKITE_PLUGIN_GIT_SNAPSHOT_PATCHES=false
+  run "$hook"
+  [ "$status" -eq 0 ]
+  assert_checkout "$latest"
+  ! grep -q ' patch ' "$TEST_CACHE/operations"
 }

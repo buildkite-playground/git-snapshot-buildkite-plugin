@@ -62,6 +62,7 @@ does not change protected mirror settings or use cache volumes.
 | `max-age` | `86400` | Refresh age and key period in seconds, 1–86400. |
 | `refresh` | `true` | Save missing or stale snapshots. `false` makes Cache use read-only. |
 | `refresh-only` | `false` | Refresh job; pair with `command: ":"`. |
+| `patches` | `true` | Restore and save per-commit patches (see below). |
 | `key-prefix` | `git-snapshot-v3` | Cache namespace; change to re-seed snapshots. |
 
 `mode: checkout` works without disabling mirrors, but does not inherit the
@@ -89,13 +90,70 @@ steps:
 Use the same repo URL, key settings and Cache scope as consumer jobs.
 `refresh-only` still materializes HEAD; it does not skip the command.
 
+## Patch cache: one upstream fetch per commit, not per job
+
+A snapshot alone still leaves every job fetching its commit from origin, which
+hits Git host rate limits in large organizations. So the first job to check out
+a commit also saves a **patch**: a Git bundle holding what the snapshot lacks for
+that commit—the newer commits and the commit's tree, filtered like the snapshot.
+Later jobs for that commit restore the patch from Cache and check out without
+fetching. Set `patches: false` to turn this off.
+
+* Keys are `[key-prefix, repo, filter, snapshot commit, build commit]`, exact
+  match only and write-once. A snapshot refresh changes the snapshot commit, so
+  old patches simply stop matching and expire.
+* Restore uses a patch only when `BUILDKITE_COMMIT` is a full SHA. A `HEAD` or
+  branch build fetches as usual, then saves its patch under the commit the agent
+  resolved, so the build's later jobs, pinned to that SHA, hit.
+* A hit runs `git bundle verify`, unbundles, and confirms offline that every
+  commit back to the snapshot and the whole build tree are present. Objects are
+  content-addressed, so a bad patch can only be incomplete; that falls back to a
+  fetch.
+* Parallel jobs on a brand-new commit all miss and fetch; the first save wins.
+* Deeper history still lazily fetches as before. Submodules and LFS are not covered.
+
+### Let the agent skip its fetch
+
+In `mode: agent`, the agent fetches the commit again unless
+`git-skip-fetch-existing-commits` is on (agent 3.119.0+, no experiment flag).
+The pre-checkout hook exports `BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=true`
+for a job whose commit is local after restore, and `false` for one whose commit
+is not. That works under the default `checkout-override-mode` (`from-job`, as on
+hosted agents). Under `strict`, or with command evaluation disabled, the agent
+blocks the change; set it in the agent configuration instead:
+
+```sh
+BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=true  # or git-skip-fetch-existing-commits=true
+```
+
+With the agent setting, a patch miss pays for the agent's presence check. Git
+must honor `GIT_NO_LAZY_FETCH` (2.43.4+, 2.45.1+, or Ubuntu 24.04's
+`2.43.0-1ubuntu7.4`); older Git lazily fetches the missing commit's whole
+history. Ubuntu's Git 2.43.0 also scans every promisor object first: on hosted
+agents that added about 21s (treeless) and 107s (blobless) to a Linux miss.
+Git 2.45.4 and later answered immediately in a local check.
+
+Skip-fetch does not cover branch verification. With `git-commit-verification`
+`strict` (the default) or `fail-closed`, the agent still fetches the branch tip
+once per job to check the commit is on the branch. It skips that for `HEAD`,
+tag, pull request and custom-refspec builds, or with `git-commit-verification=off`.
+`git-fetch-base-branch` (off by default) also fetches regardless. The plugin
+leaves these alone. `mode: checkout` does not verify branches, and does no fetch
+at all on a hit.
+
+On Linux with hosted agents, a 1 + 8 job build dropped from 45 upstream Git
+sessions (108 HTTP requests) to 13 (52) in agent mode, and from 36 (63) to 4 (7)
+in checkout mode. Each agent-mode hit's one remaining session is branch
+verification. [Details](benchmarks/patch-cache.md).
+
 ## Notes
 
 * Keep Git authentication available during checkout **and the job**: both filters
   lazily fetch missing history from `origin`. Configure credentials outside the
   repo; embedded HTTP credentials are rejected and local Git config is not cached.
-* Cache policies must prevent untrusted PRs from saving snapshots trusted jobs
-  restore. `refresh: false` is not an access policy. Never cache secrets.
+* Cache policies must prevent untrusted PRs from saving snapshots or patches
+  trusted jobs restore. `refresh: false` (which also stops patch saves) is not an
+  access policy. Never cache secrets.
 * Agent mode leaves existing checkouts alone; `BUILDKITE_CLEAN_CHECKOUT=true`
   bypasses seeding. Shallow or mirror-dependent checkouts are not saved.
 * Submodule data and LFS downloads are not cached. In checkout mode, initialize

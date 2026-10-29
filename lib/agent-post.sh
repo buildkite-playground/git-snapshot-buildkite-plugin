@@ -14,12 +14,6 @@ if [[ ! -d .git || -L .git || -e .git/shallow || -e .git/objects/info/alternates
   echo 'git-snapshot: not an independent partial repository; skipping save'
   exit 0
 fi
-created=0
-if [[ -f .git/git-snapshot-created-at ]]; then
-  read -r created < .git/git-snapshot-created-at || created=0
-fi
-[[ "$created" =~ ^[0-9]+$ ]] || created=0
-(( now - created >= max_age )) || exit 0
 
 # Cache preparation (including disk exhaustion) must not fail a usable checkout.
 set -E
@@ -27,8 +21,26 @@ trap 'echo "git-snapshot: snapshot save failed; agent checkout remains usable" >
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 cache_config
-started=$SECONDS
 sha="$(git_cmd rev-parse HEAD)"
+
+# Written by this job's restore after a patch miss, including HEAD/branch builds:
+# later jobs for the commit the agent resolved restore this patch instead of fetching.
+if [[ -f .git/git-snapshot-patch-base ]]; then
+  read -r base < .git/git-snapshot-patch-base || base=''
+  rm -f .git/git-snapshot-patch-base
+  if [[ "$base" =~ ^[0-9a-f]{40}$ ]] && ! save_patch "$base" "$sha"; then
+    echo 'git-snapshot: patch save failed; agent checkout remains usable' >&2
+  fi
+fi
+
+created=0
+if [[ -f .git/git-snapshot-created-at ]]; then
+  read -r created < .git/git-snapshot-created-at || created=0
+fi
+[[ "$created" =~ ^[0-9]+$ ]] || created=0
+(( now - created >= max_age )) || exit 0
+
+started=$SECONDS
 # Copy objects only, not agent credentials, hooks, sparse config, LFS or submodules.
 # No hardlinked mutable Git metadata, and no worktree files, enter the archive.
 git_cmd init --template= "$scratch/snapshot"

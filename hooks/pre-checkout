@@ -13,6 +13,23 @@ case "${BUILDKITE_SKIP_CHECKOUT:-false}" in
           echo 'git-snapshot: Git mirrors enabled; skipping snapshot restore; agent owns checkout'
         else
           bash "$(dirname "${BASH_SOURCE[0]}")/../lib/agent-pre.sh" || exit "$?"
+          # Written only by this job's restore. The agent skips its fetch for a local commit.
+          # For a missing one, the agent's presence check would lazily fetch its whole
+          # history on Git without GIT_NO_LAZY_FETCH (before 2.43.4/2.45.1). Ubuntu 24.04's
+          # Git 2.43.0 has it, but scans every promisor object instead (Linux: ~20s, blobless ~110s).
+          if [[ -f "$BUILDKITE_BUILD_CHECKOUT_PATH/.git/git-snapshot-commit" ]]; then
+            case "$(cat "$BUILDKITE_BUILD_CHECKOUT_PATH/.git/git-snapshot-commit"):${BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS:-false}:${BUILDKITE_CHECKOUT_OVERRIDE_MODE:-from-job}" in
+              present:true:*) echo 'git-snapshot: commit is local; agent skips its fetch' ;;
+              present:*:strict) echo 'git-snapshot: commit is local; checkout-override-mode strict keeps the agent fetch' ;;
+              present:*)
+                echo 'git-snapshot: commit is local; agent skips its fetch'
+                export BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=true
+                ;;
+              missing:true:strict) echo 'git-snapshot: warning: commit is not local; agent skip-fetch searches for it before fetching' >&2 ;;
+              missing:true:*) export BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=false ;;
+            esac
+            rm -f "$BUILDKITE_BUILD_CHECKOUT_PATH/.git/git-snapshot-commit"
+          fi
         fi
         ;;
       *) echo 'git-snapshot: mode must be checkout or agent' >&2; exit 1 ;;
