@@ -78,6 +78,43 @@ cross-check, not another n=10 distribution. The blobless cold seed took 124.73s
 including save (n=1); its original treeless cold validation had the same harness
 issue as Chromium and is excluded from cold timing claims.
 
+## With and without plugin comparison
+
+The main README compares the warm treeless results above with full-history
+no-plugin checkouts, not with the blobless snapshot variant:
+
+| Repository | Without plugin | With plugin, warm treeless |
+| --- | --- | --- |
+| Chromium | 1762.267s, n=1, agent full clone | 32.846s median, n=10 |
+| Linux | 256.925s median, n=4, custom full-history checkout | 11.422s median, n=3 |
+
+Chromium uses the same pinned revision and bootstrap timing scope; the baseline
+is from [the earlier round](README.md#chromium-real-history-and-more-than-500000-entries),
+not a newly repeated distribution. These are different checkout strategies,
+including different object sets and parallel checkout settings, not an isolated
+measurement of Cache with all other variables held constant.
+
+**Linux is contextual, not a matched comparison.** Its earlier no-plugin baseline
+uses SHA `6b4b543fa18757297ac756a6fe6e64f506b7844a`, while the plugin samples
+above use `44dc57ed1e77a23248ef28732486f4b7e9468cf7` (fifteen fewer reachable
+commits). Both ran on hosted-large without mirrors. The baseline times a custom
+`git init`, remote setup, full-history fetch of branches/tags and `checkout
+--force`, stopping before validation. Unlike plugin timings, it excludes
+bootstrap setup. It does not measure the agent's default checkout. Do not quote
+their ratio as a matched speedup.
+
+Linux baseline evidence: [build 4](https://buildkite.com/buildkite/temporary-large-linux-checkout-benchmark-20261026-ming/builds/4),
+with collated results and `summary.json` in
+[collector build 6](https://buildkite.com/buildkite/temporary-large-linux-checkout-benchmark-20261026-ming/builds/6).
+The artifact's `plain.all` records n=4, median 256.92511116549997s, range
+251.038140816–261.052656106s. The older 43.6s full-snapshot restore is **not**
+a no-plugin clone baseline and is not used in this chart.
+
+The chart uses one shared linear scale starting at zero. With-plugin results
+require an existing warm snapshot and exclude cold seeding/periodic saves;
+neither strategy includes queue or machine startup time. The sample counts,
+Linux methodology difference and warm-cache condition are in the README caption.
+
 ## Old snapshot, newer commit — checkout without save
 
 These Chromium tests deliberately use **plugin-owned `mode: checkout`** in the

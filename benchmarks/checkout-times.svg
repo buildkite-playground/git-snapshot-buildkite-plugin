@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="316" viewBox="0 0 600 316" role="img" aria-labelledby="title desc">
+  <title id="title">Checkout without and with Git Snapshot</title>
+  <desc id="desc">Hosted-large with mirrors off. Chromium: without plugin, full clone 1762.27 seconds, one sample; with plugin, warm treeless median 32.85 seconds, ten samples. Linux: without plugin, custom full-history checkout median 256.93 seconds, four samples; with plugin, warm treeless median 11.42 seconds, three samples. Linux uses different revisions and timing scopes, not a matched comparison. Plugin times include bootstrap setup, restore, fetch and checkout but exclude save. All bars share a linear scale starting at zero.</desc>
+  <style>
+    svg { --bg: #ffffff; --fg: #172b25; --muted: #57665f; --context: #b8c4be; --accent: #00865a; --rule: #e3e9e6; background: var(--bg); }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--fg); font-variant-numeric: tabular-nums; }
+    .muted { fill: var(--muted); }
+    .context { fill: var(--context); }
+    .accent { fill: var(--accent); }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg: #0d1117; --fg: #f0f6fc; --muted: #a1aea7; --context: #53655b; --accent: #38d996; --rule: #303b34; }
+    }
+  </style>
+  <rect width="600" height="316" fill="var(--bg)"/>
+  <text x="24" y="36" font-size="26" font-weight="500">Checkout time</text>
+  <text x="24" y="101" font-size="16" font-weight="500">Chromium</text>
+  <text x="24" y="135" font-size="16" class="muted">Without plugin</text>
+  <rect x="156" y="117" width="281.96" height="23" class="context"/>
+  <text x="448" y="135" font-size="20">29m 22s</text>
+  <text x="24" y="170" font-size="16">With plugin</text>
+  <rect x="156" y="152" width="5.26" height="23" class="accent"/>
+  <text x="174" y="170" font-size="20" font-weight="500">33s</text>
+  <line x1="24" y1="195" x2="576" y2="195" stroke="var(--rule)"/>
+  <text x="24" y="225" font-size="16" font-weight="500">Linux</text>
+  <text x="24" y="259" font-size="16" class="muted">Without plugin</text>
+  <rect x="156" y="241" width="41.11" height="23" class="context"/>
+  <text x="208" y="259" font-size="20">4m 17s</text>
+  <text x="24" y="294" font-size="16">With plugin</text>
+  <rect x="156" y="276" width="1.83" height="23" class="accent"/>
+  <text x="170" y="294" font-size="20" font-weight="500">11s</text>
+</svg>
