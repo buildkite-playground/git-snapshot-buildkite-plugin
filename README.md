@@ -26,6 +26,30 @@ Requires Bash, Git 2.43+ and clustered agents 4.0.3+ with Buildkite Cache config
 (included on hosted agents). Pin a reviewed commit in production. The agent owns
 checkout through pre/post-checkout hooks; do not set `BUILDKITE_SKIP_CHECKOUT`.
 
+## How this works
+
+![Animated diagram of one job. pre-checkout restores the snapshot and the commit's patch from Buildkite Cache. On a hit, the agent's checkout skips its fetch, so only its branch check reaches upstream. After a miss, post-checkout saves the patch, and about once a day it saves a new snapshot.](docs/how-it-works.svg)
+
+The plugin keeps two kinds of entries in Buildkite Cache:
+
+* **Snapshot**: the big one, the repository's whole `.git` with full history
+  (treeless by default; about 1 GB for Linux). It is saved about once per
+  `max-age` period, which is daily by default.
+* **Patch**: a small Git bundle from the snapshot's commit to one build commit
+  (about 0.5 MB for Linux). It is saved once per new commit, usually by the
+  first job that builds it.
+
+| Step | Runs in | When |
+| --- | --- | --- |
+| Restore the snapshot | pre-checkout | Every job; on a Cache miss it clones from upstream instead |
+| Look up and apply the commit's patch | pre-checkout | Every job whose `BUILDKITE_COMMIT` is a full SHA other than the snapshot's |
+| Tell the agent to skip its fetch | pre-checkout | When the commit is local after the restore ([details](#let-the-agent-skip-its-fetch)) |
+| Fetch the commit | agent checkout | Only when the commit is not local, such as after a patch miss |
+| Check the commit is on the branch | agent checkout | Branch builds unless `git-commit-verification=off`; a hit's only upstream request |
+| Check out the commit | agent checkout | Every job |
+| Save the patch | post-checkout | After a patch miss or a `HEAD` build: usually the first job on a new commit |
+| Save a new snapshot | post-checkout | When the restored snapshot is older than `max-age`: about once a day |
+
 ## If your job uses path history, set `treeless: false`
 
 Treeless is best for checkout-only CI. Use blobless mode for:

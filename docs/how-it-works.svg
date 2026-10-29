@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="690" viewBox="0 0 960 690" role="img" aria-labelledby="title desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, 'DejaVu Sans', sans-serif">
+<title id="title">How git-snapshot works</title>
+<desc id="desc">Buildkite Cache holds two entries: a big snapshot of the .git directory, saved about once a day (max-age), and a small per-commit patch from the snapshot to the build commit, saved once per new commit by its first job. Every job runs three steps. The plugin's pre-checkout hook restores the snapshot, looks up the patch for the commit and, on a hit, applies it and sets skip-fetch. The agent's checkout then skips its fetch on a hit (only its branch check reaches upstream), or fetches the commit on a miss, and checks out. The plugin's post-checkout hook saves the patch after a miss, and saves a new snapshot once the old one is older than max-age.</desc>
+<defs><marker id="arrow-idle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker><marker id="arrow-on" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f9fafb"/></marker></defs>
+<rect x="1" y="1" width="958" height="688" rx="16" fill="#111827" stroke="#374151" stroke-width="2"/>
+<text x="32" y="52" font-size="28" fill="#f9fafb" font-weight="700">How git-snapshot works</text>
+<text x="32" y="82" font-size="16" fill="#d1d5db">Two Buildkite Cache entries let most jobs check out without fetching from upstream.</text>
+<circle cx="752" cy="46" r="12" fill="#1f2937" stroke="#4b5563" stroke-width="1.5"/>
+<circle cx="752" cy="46" r="12" fill="#22d3ee" opacity="1"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.0167;0.15;0.1667;1" values="0;1;1;0;0"/></circle>
+<text x="752" y="51" font-size="13" fill="#f9fafb" font-weight="700" text-anchor="middle">1</text>
+<text x="752" y="51" font-size="13" font-weight="700" fill="#111827" text-anchor="middle" opacity="1">1<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.0167;0.15;0.1667;1" values="0;1;1;0;0"/></text>
+<circle cx="784" cy="46" r="12" fill="#1f2937" stroke="#4b5563" stroke-width="1.5"/>
+<circle cx="784" cy="46" r="12" fill="#22d3ee" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.1667;0.1833;0.3167;0.3333;1" values="0;0;1;1;0;0"/></circle>
+<text x="784" y="51" font-size="13" fill="#f9fafb" font-weight="700" text-anchor="middle">2</text>
+<text x="784" y="51" font-size="13" font-weight="700" fill="#111827" text-anchor="middle" opacity="0">2<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.1667;0.1833;0.3167;0.3333;1" values="0;0;1;1;0;0"/></text>
+<circle cx="816" cy="46" r="12" fill="#1f2937" stroke="#4b5563" stroke-width="1.5"/>
+<circle cx="816" cy="46" r="12" fill="#22d3ee" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.4833;0.5;1" values="0;0;1;1;0;0"/></circle>
+<text x="816" y="51" font-size="13" fill="#f9fafb" font-weight="700" text-anchor="middle">3</text>
+<text x="816" y="51" font-size="13" font-weight="700" fill="#111827" text-anchor="middle" opacity="0">3<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.4833;0.5;1" values="0;0;1;1;0;0"/></text>
+<circle cx="848" cy="46" r="12" fill="#1f2937" stroke="#4b5563" stroke-width="1.5"/>
+<circle cx="848" cy="46" r="12" fill="#22d3ee" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.5;0.5167;0.65;0.6667;1" values="0;0;1;1;0;0"/></circle>
+<text x="848" y="51" font-size="13" fill="#f9fafb" font-weight="700" text-anchor="middle">4</text>
+<text x="848" y="51" font-size="13" font-weight="700" fill="#111827" text-anchor="middle" opacity="0">4<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.5;0.5167;0.65;0.6667;1" values="0;0;1;1;0;0"/></text>
+<circle cx="880" cy="46" r="12" fill="#1f2937" stroke="#4b5563" stroke-width="1.5"/>
+<circle cx="880" cy="46" r="12" fill="#22d3ee" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.6667;0.6833;0.8167;0.8333;1" values="0;0;1;1;0;0"/></circle>
+<text x="880" y="51" font-size="13" fill="#f9fafb" font-weight="700" text-anchor="middle">5</text>
+<text x="880" y="51" font-size="13" font-weight="700" fill="#111827" text-anchor="middle" opacity="0">5<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.6667;0.6833;0.8167;0.8333;1" values="0;0;1;1;0;0"/></text>
+<circle cx="912" cy="46" r="12" fill="#1f2937" stroke="#4b5563" stroke-width="1.5"/>
+<circle cx="912" cy="46" r="12" fill="#22d3ee" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.8333;0.85;0.9833;1" values="0;0;1;1;0"/></circle>
+<text x="912" y="51" font-size="13" fill="#f9fafb" font-weight="700" text-anchor="middle">6</text>
+<text x="912" y="51" font-size="13" font-weight="700" fill="#111827" text-anchor="middle" opacity="0">6<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.8333;0.85;0.9833;1" values="0;0;1;1;0"/></text>
+<rect x="24" y="104" width="912" height="174" rx="14" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="6 6"/>
+<text x="44" y="128" font-size="13" fill="#9ca3af" font-weight="700" letter-spacing="1.5">BUILDKITE CACHE</text>
+<rect x="44" y="140" width="428" height="122" rx="12" fill="#1e3a8a" stroke="#60a5fa" stroke-width="2"/>
+<text x="64" y="172" font-size="22" fill="#dbeafe" font-weight="700">Snapshot</text>
+<text x="64" y="200" font-size="16" fill="#f3f4f6">Big: the whole .git (~1 GB for Linux)</text>
+<text x="64" y="226" font-size="16" fill="#ffffff" font-weight="700">Saved about once a day,</text>
+<text x="64" y="248" font-size="16" fill="#ffffff">when it is older than max-age</text>
+<rect x="44" y="140" width="428" height="122" rx="12" fill="#ffffff" fill-opacity="0.07" stroke="#93c5fd" stroke-width="5" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.15;0.1667;0.8333;0.85;1" values="1;1;0;0;1;1"/></rect>
+<rect x="488" y="140" width="428" height="122" rx="12" fill="#78350f" stroke="#fbbf24" stroke-width="2"/>
+<text x="508" y="172" font-size="22" fill="#fef3c7" font-weight="700">Patch</text>
+<text x="508" y="200" font-size="16" fill="#f3f4f6">Small: snapshot → one commit (~0.5 MB)</text>
+<text x="508" y="226" font-size="16" fill="#ffffff" font-weight="700">Saved once per new commit,</text>
+<text x="508" y="248" font-size="16" fill="#ffffff">usually by its first job</text>
+<rect x="488" y="140" width="428" height="122" rx="12" fill="#ffffff" fill-opacity="0.07" stroke="#fcd34d" stroke-width="5" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.1667;0.1833;0.3167;0.3333;0.6667;0.6833;0.8167;0.8333;1" values="0;0;1;1;0;0;1;1;0;0"/></rect>
+<rect x="24" y="320" width="288" height="210" rx="14" fill="#1f2937" stroke="#6b7280" stroke-width="2"/>
+<text x="44" y="352" font-size="21" fill="#f9fafb" font-weight="700">1  pre-checkout</text>
+<text x="44" y="376" font-size="14" fill="#9ca3af">plugin hook</text>
+<rect x="336" y="320" width="288" height="210" rx="14" fill="#1f2937" stroke="#6b7280" stroke-width="2"/>
+<text x="356" y="352" font-size="21" fill="#f9fafb" font-weight="700">2  Agent checkout</text>
+<text x="356" y="376" font-size="14" fill="#9ca3af">Buildkite agent</text>
+<rect x="648" y="320" width="288" height="210" rx="14" fill="#1f2937" stroke="#6b7280" stroke-width="2"/>
+<text x="668" y="352" font-size="21" fill="#f9fafb" font-weight="700">3  post-checkout</text>
+<text x="668" y="376" font-size="14" fill="#9ca3af">plugin hook</text>
+<line x1="314" y1="425" x2="332" y2="425" stroke="#9ca3af" stroke-width="3" marker-end="url(#arrow-idle)"/>
+<line x1="626" y1="425" x2="644" y2="425" stroke="#9ca3af" stroke-width="3" marker-end="url(#arrow-idle)"/>
+<rect x="36" y="392" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="36" y="392" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.0167;0.15;0.1667;1" values="0;1;1;0;0"/></rect>
+<text x="50" y="418" font-size="16" fill="#f3f4f6">Restore the snapshot</text>
+<rect x="36" y="438" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="36" y="438" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.1667;0.1833;0.3167;0.3333;1" values="0;0;1;1;0;0"/></rect>
+<text x="50" y="464" font-size="16" fill="#f3f4f6">Look up this commit’s patch</text>
+<rect x="36" y="484" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="36" y="484" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.1667;0.1833;0.3167;0.3333;1" values="0;0;1;1;0;0"/></rect>
+<text x="50" y="510" font-size="16" fill="#f3f4f6"><tspan fill="#86efac" font-weight="700">Hit:</tspan> apply, set skip-fetch</text>
+<rect x="348" y="392" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="348" y="392" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.4833;0.5;1" values="0;0;1;1;0;0"/></rect>
+<text x="362" y="418" font-size="16" fill="#f3f4f6"><tspan fill="#86efac" font-weight="700">Hit:</tspan> skip the fetch</text>
+<rect x="348" y="438" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="348" y="438" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.5;0.5167;0.65;0.6667;1" values="0;0;1;1;0;0"/></rect>
+<text x="362" y="464" font-size="16" fill="#f3f4f6"><tspan fill="#fca5a5" font-weight="700">Miss:</tspan> fetch the commit</text>
+<rect x="348" y="484" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="348" y="484" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.65;0.6667;1" values="0;0;1;1;0;0"/></rect>
+<text x="362" y="510" font-size="16" fill="#f3f4f6">Verify branch, check out</text>
+<rect x="660" y="392" width="264" height="40" rx="8" fill="#2b3647"/>
+<rect x="660" y="392" width="264" height="40" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.6667;0.6833;0.8167;0.8333;1" values="0;0;1;1;0;0"/></rect>
+<text x="674" y="418" font-size="16" fill="#f3f4f6"><tspan fill="#fca5a5" font-weight="700">Miss:</tspan> save the patch</text>
+<rect x="660" y="438" width="264" height="86" rx="8" fill="#2b3647"/>
+<rect x="660" y="438" width="264" height="86" rx="8" fill="#22d3ee" fill-opacity="0.22" stroke="#67e8f9" stroke-width="2" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.8333;0.85;0.9833;1" values="0;0;1;1;0"/></rect>
+<text x="674" y="476" font-size="16" fill="#f3f4f6">Snapshot older than</text>
+<text x="674" y="500" font-size="16" fill="#f3f4f6">max-age: save a new one</text>
+<line x1="168" y1="280" x2="168" y2="318" stroke="#6b7280" stroke-width="3" marker-end="url(#arrow-idle)"/>
+<line x1="168" y1="280" x2="168" y2="318" stroke="#f9fafb" stroke-width="4" marker-end="url(#arrow-on)" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.0167;0.3167;0.3333;1" values="0;1;1;0;0"/></line>
+<text x="186" y="304.0" font-size="15" fill="#d1d5db">restore</text>
+<line x1="792" y1="318" x2="792" y2="280" stroke="#6b7280" stroke-width="3" marker-end="url(#arrow-idle)"/>
+<line x1="792" y1="318" x2="792" y2="280" stroke="#f9fafb" stroke-width="4" marker-end="url(#arrow-on)" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.6667;0.6833;0.9833;1" values="0;0;1;1;0"/></line>
+<text x="810" y="304.0" font-size="15" fill="#d1d5db">save</text>
+<line x1="480" y1="532" x2="480" y2="564" stroke="#6b7280" stroke-width="3" marker-end="url(#arrow-idle)" marker-start="url(#arrow-idle)"/>
+<line x1="480" y1="532" x2="480" y2="564" stroke="#f9fafb" stroke-width="4" marker-end="url(#arrow-on)" marker-start="url(#arrow-on)" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.65;0.6667;1" values="0;0;1;1;0;0"/></line>
+<text x="498" y="553.0" font-size="15" fill="#d1d5db"></text>
+<rect x="24" y="566" width="912" height="58" rx="14" fill="#450a0a" stroke="#f87171" stroke-width="2"/>
+<text x="44" y="602" font-size="19" fill="#fee2e2" font-weight="700">Upstream Git server</text>
+<text x="916" y="601" font-size="15" fill="#f3f4f6" text-anchor="end"><tspan fill="#86efac" font-weight="700">Hit:</tspan> branch check only   ·   <tspan fill="#fca5a5" font-weight="700">Miss:</tspan> one fetch per new commit</text>
+<rect x="24" y="566" width="912" height="58" rx="14" fill="#ffffff" fill-opacity="0.07" stroke="#fca5a5" stroke-width="5" opacity="0"><animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.65;0.6667;1" values="0;0;1;1;0;0"/></rect>
+<text x="32" y="664" font-size="17" font-weight="600" fill="#f9fafb" opacity="1">Every job: pre-checkout restores the snapshot, the big .git, from Buildkite Cache.<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.0167;0.15;0.1667;1" values="0;1;1;0;0"/></text>
+<text x="32" y="664" font-size="17" font-weight="600" fill="#f9fafb" opacity="0">Patch hit: pre-checkout applies the patch. The commit is local, so it sets skip-fetch.<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.1667;0.1833;0.3167;0.3333;1" values="0;0;1;1;0;0"/></text>
+<text x="32" y="664" font-size="17" font-weight="600" fill="#f9fafb" opacity="0">So the agent’s checkout skips its fetch. Only its branch check reaches upstream.<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.3333;0.35;0.4833;0.5;1" values="0;0;1;1;0;0"/></text>
+<text x="32" y="664" font-size="17" font-weight="600" fill="#f9fafb" opacity="0">Patch miss (first job on a new commit): the agent fetches the commit from upstream.<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.5;0.5167;0.65;0.6667;1" values="0;0;1;1;0;0"/></text>
+<text x="32" y="664" font-size="17" font-weight="600" fill="#f9fafb" opacity="0">post-checkout then saves the patch, so every later job on that commit is a hit.<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.6667;0.6833;0.8167;0.8333;1" values="0;0;1;1;0;0"/></text>
+<text x="32" y="664" font-size="17" font-weight="600" fill="#f9fafb" opacity="0">Once the snapshot is older than max-age (about a day), post-checkout saves a new one.<animate attributeName="opacity" dur="24s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.8333;0.85;0.9833;1" values="0;0;1;1;0"/></text>
+</svg>
