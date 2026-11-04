@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="440" viewBox="0 0 640 440" role="img" aria-labelledby="title desc">
-  <title id="title">Linux per-job run time: Git-native options and warm Git-snapshot</title>
-  <desc id="desc">One production build on hosted-large agents with mirrors off. Every bar measures per-job run time (Ran in) from the Steps view, excluding queue wait and including plugin setup, checkout, hooks and the command. Full clone with agent defaults: 247 seconds. Blobless clone with eight checkout workers: 254 seconds. Treeless clone with eight checkout workers: 210 seconds. Shallow clone, depth one, with eight checkout workers: 205 seconds. Git-snapshot with eight checkout workers: 15 seconds, the slower of two warm snapshot and patch hits (15 and 13 seconds). No group spans are used. Native variants have one sample each; the two snapshot jobs are from the same build, not independent builds. Snapshot seeding is not shown. Shallow loses history; treeless makes path history slow. Bars share a linear scale starting at zero, two pixels per second. Source: supplied production Steps-view screenshot; build number not visible.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="410" viewBox="0 0 640 410" role="img" aria-labelledby="title desc">
+  <title id="title">Linux checkout: Git-native options and warm Git-snapshot</title>
+  <desc id="desc">Linux kernel on hosted-large agents, mirrors off. Native bars are per-job run times from one production build, excluding queue wait: full clone with agent defaults 247 seconds, blobless 254 seconds, treeless 210 seconds, shallow depth one 205 seconds. Git-snapshot is a separate controlled checkout median of 9.98 seconds across 16 warm snapshot and patch hits, displayed as approximately 10 seconds. All except agent defaults use eight checkout workers. Native job run times and controlled checkout times have different timing scopes; this is not a matched speedup measurement. Seeding and saves are excluded from the snapshot median. Bars share a linear scale starting at zero, two pixels per second. Sources and limitations: benchmarks/linux-demo.md.</desc>
   <style>
     svg { --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --context: #8c959f; --accent: #0969da; --rule: #d1d9e0; background: var(--bg); }
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); font-variant-numeric: tabular-nums; }
@@ -11,31 +11,30 @@
       svg { --bg: #0d1117; --fg: #f0f6fc; --muted: #b1bac4; --context: #9198a1; --accent: #58a6ff; --rule: #3d444d; }
     }
   </style>
-  <rect width="640" height="440" fill="var(--bg)"/>
+  <rect width="640" height="410" fill="var(--bg)"/>
   <text x="24" y="36" font-size="24" font-weight="500">Linux checkout comparison</text>
-  <text x="24" y="63" font-size="16" class="muted">Per-job run time (“Ran in”); excludes queue wait</text>
+  <text x="24" y="63" font-size="16" class="muted">Linux kernel · hosted-large · mirrors off</text>
 
-  <text x="24" y="102" font-size="18">Full clone — agent defaults</text>
+  <text x="24" y="102" font-size="18">Full clone</text>
   <text x="616" y="102" font-size="18" text-anchor="end">4m 7s</text>
   <rect x="24" y="112" width="494" height="16" class="context"/>
 
-  <text x="24" y="156" font-size="18">Blobless clone — 8 workers</text>
+  <text x="24" y="156" font-size="18">Blobless</text>
   <text x="616" y="156" font-size="18" text-anchor="end">4m 14s</text>
   <rect x="24" y="166" width="508" height="16" class="context"/>
 
-  <text x="24" y="210" font-size="18">Treeless clone — 8 workers</text>
+  <text x="24" y="210" font-size="18">Treeless</text>
   <text x="616" y="210" font-size="18" text-anchor="end">3m 30s</text>
   <rect x="24" y="220" width="420" height="16" class="context"/>
 
-  <text x="24" y="264" font-size="18">Shallow clone (depth 1) — 8 workers</text>
+  <text x="24" y="264" font-size="18">Shallow (depth 1)</text>
   <text x="616" y="264" font-size="18" text-anchor="end">3m 25s</text>
   <rect x="24" y="274" width="410" height="16" class="context"/>
 
-  <text x="24" y="318" font-size="18" font-weight="500">Git-snapshot — warm (slower of 2)</text>
-  <text x="616" y="318" font-size="18" font-weight="500" text-anchor="end">15s</text>
-  <rect x="24" y="328" width="30" height="16" class="accent"/>
+  <text x="24" y="318" font-size="18" font-weight="500">Git-snapshot</text>
+  <text x="616" y="318" font-size="18" font-weight="500" text-anchor="end">~10s</text>
+  <rect x="24" y="328" width="19.96" height="16" class="accent"/>
 
   <line x1="24" y1="368" x2="616" y2="368" stroke="var(--rule)"/>
-  <text x="24" y="395" font-size="16" class="muted">Warm snapshot + patch hit; snapshot seed cost not shown.</text>
-  <text x="24" y="421" font-size="15" class="muted">One build; native n=1; snapshot jobs 15s and 13s. Linear from zero.</text>
+  <text x="24" y="395" font-size="16" class="muted">Native: job run time; Git-snapshot: median checkout (n=16).</text>
 </svg>

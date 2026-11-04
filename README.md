@@ -8,31 +8,11 @@ metadata is cached, never the worktree.
 
 ## Linux checkout comparison
 
-![Linux per-job run time, excluding queue wait: full clone 4m 7s, blobless 4m 14s, treeless 3m 30s, shallow 3m 25s, and warm Git-snapshot 15s (the slower of two jobs: 15s and 13s). One build; snapshot seed cost not shown.](docs/linux-benchmark.svg)
+![Linux checkout: full clone 4m 7s, blobless 4m 14s, treeless 3m 30s, shallow 3m 25s; Git-snapshot ~10s median checkout. Native bars are job run times from one build.](docs/linux-benchmark.svg)
 
-One production build of the Linux kernel repo on `hosted-large`, mirrors off.
-Every bar is the Steps view's **per-job run time ("Ran in"), excluding queue wait**:
-plugin setup, checkout, hooks and the command, not isolated clone time.
-Git-snapshot shows the **slower of two jobs: 15s** (the other took 13s).
-Group spans are not used. The supplied screenshots do not show the build number.
+Linux kernel, `hosted-large`, mirrors off. [Demo pipeline](https://github.com/buildkite-playground/linux/blob/git-snapshot-demo/.buildkite/pipeline.yml).
 
-The [demo pipeline YAML](https://github.com/buildkite-playground/linux/blob/git-snapshot-demo/.buildkite/pipeline.yml)
-compares full clone with agent defaults; blobless (`--filter=blob:none`, fetch
-blobs on demand); treeless (`--filter=tree:0`, fetch trees and blobs on demand);
-shallow (`--depth=1`, latest commit only); and Git-snapshot (restore cached Git
-metadata, then let the agent check out). All except agent defaults use eight
-checkout workers. Each job's command is just `git rev-parse HEAD`.
-
-**Caveats:** one build (**n=1**), not a typical-time estimate. Git-snapshot was a
-**warm snapshot + patch hit**; snapshot seeding is not shown and costs extra.
-Shallow loses history; treeless makes path history and blame slow, including with
-the plugin's default filter. Use `treeless: false` for those workloads.
-
-Separately, [controlled patch-hit measurements](benchmarks/patch-cache.md#timing)
-had a **9.98s median, n=16** (8.09–13.10s), on Linux `hosted-large` with mirrors
-off. That times a nested agent bootstrap through checkout, excluding saves and
-outer-job setup; it is **not the chart's whole-job metric**.
-[Earlier benchmarks and methodology](benchmarks/treeless.md).
+Git-snapshot: median checkout over 16 snapshot + patch hits; others: job run times from one build. [Details →](benchmarks/linux-demo.md).
 
 ## Example
 
