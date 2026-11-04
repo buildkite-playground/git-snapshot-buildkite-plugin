@@ -6,12 +6,30 @@ commits, or nothing when a per-commit patch is cached, and checks out with eight
 parallel workers. The plugin never performs the checkout itself. Only Git
 metadata is cached, never the worktree.
 
-![Checkout without vs with Git Snapshot: Chromium 29m 22s vs 33s; Linux 4m 17s vs 11s](benchmarks/checkout-times.svg)
+## Linux checkout comparison
 
-Warm snapshots on hosted-large, mirrors off; seeding and refresh cost extra.
-Chromium: full clone n=1 vs plugin median n=10. Linux: custom baseline median n=4
-vs plugin median n=3, with different revisions/timing scopes—not a matched comparison.
-[Methodology and sources](benchmarks/treeless.md#with-and-without-plugin-comparison).
+![Linux job durations: full clone 4m 12s, blobless 4m 19s, treeless 3m 34s, shallow 3m 58s, and warm Git-snapshot two-job group 30s. One build, including agent startup; snapshot seed cost not shown.](docs/linux-benchmark.svg)
+
+One production build of the Linux kernel repo on `hosted-large`, mirrors off:
+**build #5**, branch `git-snapshot-demo`, commit
+[`71f3a3d`](https://github.com/buildkite-playground/linux/commit/71f3a3d4a4e1533d76586de5ff1d8ff9c8fc761a).
+These are displayed waterfall job durations, including agent startup, not isolated
+clone times. Git-snapshot's **30s is the span of two parallel jobs**, not their sum.
+The shallow row is unchanged; no adjustment was made for its roughly 30s pre-start wait.
+
+The [demo pipeline YAML](https://github.com/buildkite-playground/linux/blob/git-snapshot-demo/.buildkite/pipeline.yml)
+compares full clone with agent defaults; blobless (`--filter=blob:none`, fetch
+blobs on demand); treeless (`--filter=tree:0`, fetch trees and blobs on demand);
+shallow (`--depth=1`, latest commit only); and Git-snapshot (restore cached Git
+metadata, then let the agent check out). All except agent defaults use eight
+checkout workers. Each job's command is just `git rev-parse HEAD`.
+
+**Caveats:** one build (**n=1**), not a typical-time estimate. Git-snapshot was a
+**warm snapshot + patch hit**; snapshot seeding is not shown and costs extra.
+Shallow loses history; treeless makes path history and blame slow, including with
+the plugin's default filter. Use `treeless: false` for those workloads.
+[Earlier controlled benchmarks and methodology](benchmarks/treeless.md),
+[historical checkout-hook results](benchmarks/README.md).
 
 ## Example
 
