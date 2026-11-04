@@ -8,14 +8,13 @@ metadata is cached, never the worktree.
 
 ## Linux checkout comparison
 
-![Linux job durations: full clone 4m 12s, blobless 4m 19s, treeless 3m 34s, shallow 3m 58s, and warm Git-snapshot two-job group 30s. One build, including agent startup; snapshot seed cost not shown.](docs/linux-benchmark.svg)
+![Linux per-job run time, excluding queue wait: full clone 4m 7s, blobless 4m 14s, treeless 3m 30s, shallow 3m 25s, and warm Git-snapshot 15s (the slower of two jobs: 15s and 13s). One build; snapshot seed cost not shown.](docs/linux-benchmark.svg)
 
-One production build of the Linux kernel repo on `hosted-large`, mirrors off:
-**build #5**, branch `git-snapshot-demo`, commit
-[`71f3a3d`](https://github.com/buildkite-playground/linux/commit/71f3a3d4a4e1533d76586de5ff1d8ff9c8fc761a).
-These are displayed waterfall job durations, including agent startup, not isolated
-clone times. Git-snapshot's **30s is the span of two parallel jobs**, not their sum.
-The shallow row is unchanged; no adjustment was made for its roughly 30s pre-start wait.
+One production build of the Linux kernel repo on `hosted-large`, mirrors off.
+Every bar is the Steps view's **per-job run time ("Ran in"), excluding queue wait**:
+plugin setup, checkout, hooks and the command, not isolated clone time.
+Git-snapshot shows the **slower of two jobs: 15s** (the other took 13s).
+Group spans are not used. The supplied screenshots do not show the build number.
 
 The [demo pipeline YAML](https://github.com/buildkite-playground/linux/blob/git-snapshot-demo/.buildkite/pipeline.yml)
 compares full clone with agent defaults; blobless (`--filter=blob:none`, fetch
@@ -28,8 +27,12 @@ checkout workers. Each job's command is just `git rev-parse HEAD`.
 **warm snapshot + patch hit**; snapshot seeding is not shown and costs extra.
 Shallow loses history; treeless makes path history and blame slow, including with
 the plugin's default filter. Use `treeless: false` for those workloads.
-[Earlier controlled benchmarks and methodology](benchmarks/treeless.md),
-[historical checkout-hook results](benchmarks/README.md).
+
+Separately, [controlled patch-hit measurements](benchmarks/patch-cache.md#timing)
+had a **9.98s median, n=16** (8.09–13.10s), on Linux `hosted-large` with mirrors
+off. That times a nested agent bootstrap through checkout, excluding saves and
+outer-job setup; it is **not the chart's whole-job metric**.
+[Earlier benchmarks and methodology](benchmarks/treeless.md).
 
 ## Example
 

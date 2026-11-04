@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="440" viewBox="0 0 640 440" role="img" aria-labelledby="title desc">
-  <title id="title">Linux checkout: Git-native options and warm Git-snapshot</title>
-  <desc id="desc">One production build, n=1, on hosted-large agents with mirrors off. Displayed waterfall durations include agent startup, not just cloning. Full clone with agent defaults: 252 seconds. Blobless clone with eight checkout workers: 259 seconds. Treeless clone with eight checkout workers: 214 seconds. Shallow clone, depth one, with eight checkout workers: 238 seconds. Git-snapshot with eight checkout workers: 30 seconds, the span of a two-job parallel group with warm snapshot and patch hits, not a sum or an individual job measurement. Snapshot seeding is not shown. Shallow loses history; treeless makes path history slow. Bars share a linear scale starting at zero, two pixels per second. Source: Git Snapshot Demo Linux build 5, git-snapshot-demo branch, commit 71f3a3d.</desc>
+  <title id="title">Linux per-job run time: Git-native options and warm Git-snapshot</title>
+  <desc id="desc">One production build on hosted-large agents with mirrors off. Every bar measures per-job run time (Ran in) from the Steps view, excluding queue wait and including plugin setup, checkout, hooks and the command. Full clone with agent defaults: 247 seconds. Blobless clone with eight checkout workers: 254 seconds. Treeless clone with eight checkout workers: 210 seconds. Shallow clone, depth one, with eight checkout workers: 205 seconds. Git-snapshot with eight checkout workers: 15 seconds, the slower of two warm snapshot and patch hits (15 and 13 seconds). No group spans are used. Native variants have one sample each; the two snapshot jobs are from the same build, not independent builds. Snapshot seeding is not shown. Shallow loses history; treeless makes path history slow. Bars share a linear scale starting at zero, two pixels per second. Source: supplied production Steps-view screenshot; build number not visible.</desc>
   <style>
     svg { --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --context: #8c959f; --accent: #0969da; --rule: #d1d9e0; background: var(--bg); }
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--fg); font-variant-numeric: tabular-nums; }
@@ -13,29 +13,29 @@
   </style>
   <rect width="640" height="440" fill="var(--bg)"/>
   <text x="24" y="36" font-size="24" font-weight="500">Linux checkout comparison</text>
-  <text x="24" y="63" font-size="16" class="muted">One build (n=1); job duration including agent startup</text>
+  <text x="24" y="63" font-size="16" class="muted">Per-job run time (“Ran in”); excludes queue wait</text>
 
   <text x="24" y="102" font-size="18">Full clone — agent defaults</text>
-  <text x="616" y="102" font-size="18" text-anchor="end">4m 12s</text>
-  <rect x="24" y="112" width="504" height="16" class="context"/>
+  <text x="616" y="102" font-size="18" text-anchor="end">4m 7s</text>
+  <rect x="24" y="112" width="494" height="16" class="context"/>
 
   <text x="24" y="156" font-size="18">Blobless clone — 8 workers</text>
-  <text x="616" y="156" font-size="18" text-anchor="end">4m 19s</text>
-  <rect x="24" y="166" width="518" height="16" class="context"/>
+  <text x="616" y="156" font-size="18" text-anchor="end">4m 14s</text>
+  <rect x="24" y="166" width="508" height="16" class="context"/>
 
   <text x="24" y="210" font-size="18">Treeless clone — 8 workers</text>
-  <text x="616" y="210" font-size="18" text-anchor="end">3m 34s</text>
-  <rect x="24" y="220" width="428" height="16" class="context"/>
+  <text x="616" y="210" font-size="18" text-anchor="end">3m 30s</text>
+  <rect x="24" y="220" width="420" height="16" class="context"/>
 
   <text x="24" y="264" font-size="18">Shallow clone (depth 1) — 8 workers</text>
-  <text x="616" y="264" font-size="18" text-anchor="end">3m 58s</text>
-  <rect x="24" y="274" width="476" height="16" class="context"/>
+  <text x="616" y="264" font-size="18" text-anchor="end">3m 25s</text>
+  <rect x="24" y="274" width="410" height="16" class="context"/>
 
-  <text x="24" y="318" font-size="18" font-weight="500">Git-snapshot — warm, 2-job group</text>
-  <text x="616" y="318" font-size="18" font-weight="500" text-anchor="end">30s</text>
-  <rect x="24" y="328" width="60" height="16" class="accent"/>
+  <text x="24" y="318" font-size="18" font-weight="500">Git-snapshot — warm (slower of 2)</text>
+  <text x="616" y="318" font-size="18" font-weight="500" text-anchor="end">15s</text>
+  <rect x="24" y="328" width="30" height="16" class="accent"/>
 
   <line x1="24" y1="368" x2="616" y2="368" stroke="var(--rule)"/>
   <text x="24" y="395" font-size="16" class="muted">Warm snapshot + patch hit; snapshot seed cost not shown.</text>
-  <text x="24" y="421" font-size="15" class="muted">Build #5 · 71f3a3d · Shared linear scale from zero</text>
+  <text x="24" y="421" font-size="15" class="muted">One build; native n=1; snapshot jobs 15s and 13s. Linear from zero.</text>
 </svg>
